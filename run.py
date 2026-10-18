@@ -89,14 +89,20 @@ def main(argv=None):
                 raise ValueError("保存须提供--file和读取时的--version")
             path = Path(args.file).expanduser()
             if args.command == "import":
-                if path.stat().st_size > 10*1024*1024:
-                    raise ValueError("单份资料上限10MB，请分批提供")
-                emit(service.import_material(path.name, path.read_bytes(), args.subject, args.category, args.version))
+                emit(service.import_file(path, args.subject, args.category, args.version))
                 return 0
             payload = json.loads(path.read_text(encoding="utf-8-sig"))
             if args.command == "configure":
+                if isinstance(payload, dict) and "config" in payload:
+                    if set(payload)-{"config"}:
+                        raise ValueError("包装设置文件只能含config；版本使用--version提供")
+                    payload = payload["config"]
                 service.configure(payload, args.version)
             else:
+                if isinstance(payload, dict) and "record" in payload:
+                    if set(payload)-{"record"}:
+                        raise ValueError("包装交互文件只能含record；版本使用--version提供")
+                    payload = payload["record"]
                 service.record(payload, args.version)
         state = service.status(args.date)
         emit(state["plan"] if args.command == "plan" else state)

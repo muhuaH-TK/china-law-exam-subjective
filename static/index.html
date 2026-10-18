@@ -32,9 +32,9 @@
   </section>
   <div>
   <section><span class="step-label">02 / 学习资料</span><h2>先提供一份资料</h2><p>可先导入教材、讲义或理论背诵材料，其余以后补充。</p>
-    <form id="material"><label>选择文件<input name="file" type="file" accept=".pdf,.docx,.md,.txt,.png,.jpg,.jpeg,.webp" required></label>
+    <form id="material"><label>选择文件<input name="file" type="file" required></label>
       <div class="inline"><label>对应科目<select name="subject" class="subject-select"></select></label><label>资料用途<select name="category"><option value="textbook">教材</option><option value="course">课程讲义 / 目录</option><option value="theory">理论背诵材料</option><option value="questions">题目与答案</option><option value="other">其他资料</option></select></label></div>
-      <p class="hint">每份上限10MB。保留导入副本并查重，不覆盖原文件；提取文字不代表题面、图片或答案已经核验。</p><button type="submit">导入个人资料库</button>
+      <p class="hint">不限制文件大小、格式或资料科目。保留原件并查重；暂不能自动解析的资料由所选AI按需读取。导入不代表题面、图片或答案已经核验。</p><button type="submit">导入个人资料库</button>
     </form><ul id="materials" class="items"></ul>
   </section>
   <section><span class="step-label">03 / 已完成课程</span><h2>按实际进度开始</h2><form id="course">
@@ -50,10 +50,11 @@
     <p class="hint">本机运行器支持定时提醒与公开订阅采集；微博等来源由所选AI的实际浏览器读取。保存后，还需启动运行器或安装本实例的系统任务；不会启用原作者的任务。</p>
     <form id="automation"><div class="inline">
       <label class="check"><input name="learning_requested" type="checkbox">以后启用学习提醒</label><label>提醒时间<input name="learning_time" type="time" value="09:30"></label>
-      <label class="check"><input name="monitor_requested" type="checkbox">以后启用题源监测</label><label>监测时间<input name="monitor_time" type="time" value="22:00"></label>
+      <label class="check"><input name="monitor_requested" type="checkbox">从第二阶段开始启用题源监测</label><label>监测时间<input name="monitor_time" type="time" value="22:00"></label>
       <label>每日处理上限<input name="daily_limit" type="number" min="1" max="100" value="10"></label>
     </div><button type="submit">保存后台设置</button></form>
-    <form id="source"><label>预置候选<select name="preset"><option value="">自行补充来源</option><option value="lijia">李佳 · 行政法（补充并核验主页）</option><option value="zuoning">左宁 · 刑事诉讼法（补充并核验主页）</option></select></label><div class="inline"><label>来源名称<input name="name" required placeholder="老师或机构名称"></label><label>主页或来源网址<input name="url" type="url" required placeholder="https://…"></label><label>科目<select name="subject" class="subject-select" data-no-general="true"></select></label></div><button type="submit" class="secondary">登记候选来源</button></form>
+    <p class="hint">第一阶段可预先配置，届时不抓取、不处理欠项；第二阶段开始后，按选科、来源授权和每日预算监测。孟献贵主页含民商法内容，出题仍按生效科目筛选。</p>
+    <form id="source"><label>预置候选<select name="preset"><option value="">自行补充来源</option><option value="lijia">李佳 · 行政法（核验主页）</option><option value="mengxiangui">孟献贵 · 民商法（核验主页与题目科目）</option><option value="zuoning">左宁 · 刑事诉讼法（核验主页）</option></select></label><div class="inline"><label>来源名称<input name="name" required placeholder="老师或机构名称"></label><label>主页或来源网址<input name="url" type="url" required placeholder="https://…"></label><label>科目<select name="subject" class="subject-select" data-no-general="true"></select></label></div><button type="submit" class="secondary">登记候选来源</button></form>
     <ul id="sources" class="items"></ul>
     <form id="source-settings"><h3>启用或关闭一个来源</h3><label>已登记来源<select name="source_id" id="source-picker"></select></label><label>读取方式<select name="mode"><option value="browser">由所选AI浏览器读取</option><option value="rss">公开RSS / Atom订阅</option><option value="json">公开JSON Feed</option></select></label><label class="check"><input name="enabled" type="checkbox">允许持续监测这个来源</label><label>当前身份核验<textarea name="identity_verification" rows="2" placeholder="记录真实账号名称、主页与科目核对结果"></textarea></label><label>授权范围<textarea name="authorization" rows="2" placeholder="例如：允许持续读取此老师主页内的当年每日一题及其答案"></textarea></label><button type="submit">保存来源授权</button></form>
     <div class="inline"><button type="button" id="run-monitor" class="secondary">现在检查已授权来源</button><button type="button" id="prepare-schedule" class="secondary">指定本机并生成定时任务文件</button></div><p id="background-result" class="hint"></p>

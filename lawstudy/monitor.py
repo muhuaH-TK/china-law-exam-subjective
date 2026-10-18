@@ -9,12 +9,26 @@ from xml.etree import ElementTree as ET
 from .calendar import Page
 from .learning import find, required
 from .network import fetch
+from .policy import iso, stage, subjects
 from .store import utc_now
 
 PRESETS = [
     {"name": "行政法李佳", "url": "https://weibo.com/u/1552849431", "subject": "行政法", "mode": "browser", "requested": False},
+    {"name": "民商法孟献贵", "url": "https://weibo.com/2342740757?refer_flag=1001030103_", "subject": "民事综合", "mode": "browser", "requested": False},
     {"name": "左宁刑诉", "url": "https://weibo.com/u/3153511812", "subject": "刑事诉讼法", "mode": "browser", "requested": False},
 ]
+
+
+def monitor_gate(config, day):
+    """阶段限制适用于手动、定时及浏览器回填；配置本身可以提前保存。"""
+    iso(day)
+    current = stage(config, day)
+    eligible = current["number"] in (2, 3, 4)
+    if not config.get("stage_override") and config["participation"] == "participating":
+        end = config["exam_dates"].get("objective_end", {})
+        eligible = eligible or (end.get("status") == "verified" and bool(end.get("date")) and day > end["date"])
+    return {"eligible": bool(eligible), "status": "eligible" if eligible else "waiting_stage2",
+            "stage": current["number"], "reason": "从第二阶段开始，按已授权来源和预算监测" if eligible else "题源监测从第二阶段开始；第一阶段或阶段未确认时只保存配置，不抓取、不补处理欠项"}
 
 
 def parse_feed(body, content_type, base):
@@ -103,7 +117,12 @@ class MonitorMixin:
         evidence = required(payload.get("evidence"), "实际工具读取/响应核验依据", 10000)
         report = {"processed": [], "duplicates": 0, "deferred": 0}
         def mutate(data):
+            gate = monitor_gate(data["config"], day)
+            if not gate["eligible"]:
+                raise ValueError(gate["reason"])
             source = find(data["sources"], payload.get("source_id"))
+            if source["subject"] not in subjects(data["config"]["elective"]):
+                raise ValueError("来源不在当前生效科目范围")
             auth = data["config"]["authorization"]
             if not source.get("requested") or not source.get("authorization") or auth["search_mode"] == "provided_only":
                 raise ValueError("此来源持续监测尚未获得授权或已关闭")
@@ -172,7 +191,8 @@ class MonitorMixin:
         items = data.get("source_items", [])
         safe_items = [{k: v for k, v in item.items() if k != "versions"} for item in items]
         return {"version": version, "sources": data["sources"], "budget": data.get("monitor_budget", {}).get(day, {"used": 0}),
-                "items": safe_items, "backlog_count": len(data.get("monitor_backlog", [])), "daily_limit": data["config"]["automation"]["daily_limit"]}
+                "items": safe_items, "backlog_count": len(data.get("monitor_backlog", [])), "daily_limit": data["config"]["automation"]["daily_limit"],
+                "gate": monitor_gate(data["config"], day)}
 
     def read_capture(self, item_id):
         data, _ = self.store.snapshot()
@@ -187,7 +207,9 @@ class MonitorMixin:
         data, _ = self.store.snapshot()
         if not data["config"]["automation"]["monitor_requested"]:
             return {"status": "disabled", "sources": []}
-        from .policy import subjects
+        gate = monitor_gate(data["config"], day)
+        if not gate["eligible"]:
+            return {"status": gate["status"], "reason": gate["reason"], "sources": []}
         enabled = [s for s in data["sources"] if s.get("requested") and s.get("authorization") and s["subject"] in subjects(data["config"]["elective"])]
         reports, captured = [], []
         # 先给每个活动来源一次检查机会，再用余量处理已读取的其他条目。

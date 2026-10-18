@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import os
 import tempfile
+import tomllib
 import zipfile
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -31,7 +32,8 @@ def selected_files():
 def main():
     output=ROOT/"dist"
     output.mkdir(exist_ok=True)
-    destination=output/"law-study-0.2.0-source.zip"
+    version = tomllib.loads((ROOT/"pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
+    destination=output/f"china-law-exam-subjective-{version}-source.zip"
     with tempfile.NamedTemporaryFile(dir=output,delete=False,suffix=".zip") as handle:
         staged=Path(handle.name)
     try:

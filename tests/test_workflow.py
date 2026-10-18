@@ -247,12 +247,13 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn("保留全部事实", data["questions"][0]["facts"])
         self.assertEqual(len(data["source_items"][0]["versions"]), 2)
 
-    def test_presets_disabled_and_canceled_author_not_reintroduced(self):
+    def test_three_presets_disabled_and_do_not_inherit_old_authorization(self):
         self.service.source_action("presets", {}, self.version())
         data, _ = self.service.store.snapshot()
-        self.assertEqual(len(data["sources"]), 2)
+        self.assertEqual(len(data["sources"]), 3)
         self.assertTrue(all(not s["requested"] for s in data["sources"]))
-        self.assertNotIn("2342740757", json.dumps(data["sources"]))
+        self.assertIn("2342740757", json.dumps(data["sources"]))
+        self.assertTrue(all(not s.get("authorization") for s in data["sources"]))
 
     def test_history_teaching_does_not_require_extra_first_attempt(self):
         q = self.question()
@@ -271,6 +272,11 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(result["status"], "completed")
         data, _ = self.service.store.snapshot()
         self.assertEqual(len(data["sessions"][0]["answers"]), 1)
+        original = next(r for r in data["exercises"] if r["question_id"] == q)
+        self.assertEqual(len(original["answer_history"]), 2)
+        self.assertEqual(original["answer_history"][-1]["answer"], "用户一次实际重答")
+        self.assertTrue(original["answer_history"][-1]["prompted"])
+        self.assertEqual(original["completed_on"], "2027-09-10")
         self.assertEqual(len(data["errors"][0]["reviews"]), 1)
         self.assertFalse(data["errors"][0]["reviews"][0]["independent_pass"])
 
@@ -408,6 +414,8 @@ class WorkflowTests(unittest.TestCase):
         s = self.issue()["session"]["id"]
         self.learn("submit_answer", {"session_id": s, "on": "2027-09-13", "answer": "必须保留的真实测试原答"})
         self.grade(s)
+        self.learn("submit_answer", {"session_id": s, "on": "2027-09-13", "answer": "必须保留的真实测试订正"})
+        self.grade(s, False)
         data, _ = self.service.store.snapshot()
         card = data["errors"][0]["id"]
         result = export_topic(self.service, {"title": "合成专题导出验证", "card_ids": [card], "topics": [{"title": "合成知识点", "knowledge": "测试条件、否定分支、例外和后果，均为合成数据。", "navigation": "条件成立与不成立的合成分支。", "card_ids": [card], "tables": [{"headers": ["判断条件", "分支后果"], "rows": [["合成条件一", "合成后果一"], ["不成立", "另一合成后果"]]}]}]}, self.version())
@@ -416,6 +424,8 @@ class WorkflowTests(unittest.TestCase):
         output = Path(result["directory"])
         text = (output/"复习资料.md").read_text(encoding="utf-8")
         self.assertIn("必须保留的真实测试原答", text)
+        self.assertIn("必须保留的真实测试订正", text)
+        self.assertIn("知识点提示后，非独立通过", text)
         self.assertIn("PDF第", text)
         with zipfile.ZipFile(output/"复习资料.docx") as archive:
             self.assertIsNone(archive.testzip())

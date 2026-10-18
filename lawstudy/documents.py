@@ -10,7 +10,7 @@ from uuid import uuid4
 from xml.etree import ElementTree as ET
 import zipfile
 
-from .learning import answer_current, find, required, full_explanation
+from .learning import answer_current, exercise_answer_history, find, required, full_explanation
 from .store import atomic_bytes, utc_now
 
 
@@ -161,7 +161,12 @@ def build_sections(data, payload, pages=None):
         row = find(data["exercises"], q["id"], "question_id")
         answer = answer_current(q)
         blocks = ["案情\n"+q["facts"], "原设问\n"+"\n".join(q["questions"]),
-                  "真实历史原答\n"+"\n\n".join(r["on"]+"："+r["answer"] for r in row["answer_history"]),
+                  "真实历史作答（首答、订正与复测分别保留）\n"+"\n\n".join(
+                      r["on"]+" · "+{"first": "首答", "correction": "订正"}.get(r.get("phase"), "历史作答（旧记录未标阶段）")
+                      +(" · 历史回顾" if r.get("mode") == "history" else "")
+                      +(" · 知识点提示后，非独立通过" if r.get("prompted") else "")
+                      +(" · 本次答复未完成" if r.get("complete") is False else "")+"："+r["answer"]
+                      for r in exercise_answer_history(data, row)),
                   "原错漏\n"+card["detail"], "正确答案\n"+answer["label"]+"\n"+answer["content"]+"\n依据："+answer["basis"],
                   "后续表现\n"+("\n".join(r["on"]+"："+("独立通过" if r["independent_pass"] else "教学回顾，未记独立通过")+"；实际答复："+r["answer"] for r in card.get("reviews", [])) or "尚无到期回顾记录，不补造学习完成。")]
         sections.append({"key": "error-"+card_id, "title": q["source_name"]+" / "+q["locator"], "blocks": blocks, "new_page": True})

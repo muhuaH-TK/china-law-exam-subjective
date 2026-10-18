@@ -5,6 +5,7 @@ from pathlib import Path
 import tempfile
 import threading
 import unittest
+from urllib.parse import quote
 
 from lawstudy.web import make_server
 
@@ -23,7 +24,7 @@ class WebTests(unittest.TestCase):
         self.server.shutdown();self.server.server_close();self.thread.join();self.tmp.cleanup()
 
     def request(self,method,path,body=None,headers=None):
-        connection=HTTPConnection("127.0.0.1",self.server.server_port,timeout=3)
+        connection=HTTPConnection("127.0.0.1",self.server.server_port,timeout=15)
         connection.request(method,path,body=body,headers=headers or {})
         response=connection.getresponse();result=(response.status,response.read(),dict(response.getheaders()))
         connection.close();return result
@@ -73,6 +74,35 @@ class WebTests(unittest.TestCase):
         status, raw, _ = self.request("POST", "/api/monitor", "{}", headers)
         self.assertEqual(status, 200)
         self.assertEqual(json.loads(raw)["result"]["status"], "disabled")
+
+    def test_large_any_format_binary_upload_and_stale_conflict(self):
+        _, html, _ = self.request("GET", "/")
+        token = re.search(rb'name="app-token" content="([^"]+)"', html)[1].decode()
+        _, raw, _ = self.request("GET", "/api/state", headers={"X-App-Token": token})
+        headers = {"X-App-Token": token, "Content-Type": "application/octet-stream",
+                   "X-File-Name": quote("大资料.7z"), "X-File-Subject": quote("商法"), "X-File-Category": "other",
+                   "X-Instance-Version": json.loads(raw)["version"]}
+        content = b"large-arbitrary-file\n"*(1024*1024)
+        self.assertGreater(len(content), 15*1024*1024)
+        status, raw, _ = self.request("POST", "/api/material-upload", content, headers)
+        self.assertEqual(status, 200, raw)
+        material = json.loads(raw)["result"]["material"]
+        self.assertEqual(material["size"], len(content))
+        saved = Path(self.tmp.name)/"web"/material["path"]
+        self.assertEqual(saved.read_bytes(), content)
+        self.assertEqual(material["name"], "大资料.7z")
+        self.assertFalse(material["question_ready"])
+        status, _, _ = self.request("POST", "/api/material-upload", content, headers)
+        self.assertEqual(status, 409)
+
+    def test_oversized_control_request_returns_readable_json_without_reset(self):
+        _, html, _ = self.request("GET", "/")
+        token = re.search(rb'name="app-token" content="([^"]+)"', html)[1].decode()
+        headers = {"X-App-Token": token, "Content-Type": "application/json"}
+        status, raw, _ = self.request("POST", "/api/config", b" "*(16*1024*1024), headers)
+        self.assertEqual(status, 413)
+        self.assertIn("资料大小不设上限", json.loads(raw)["error"])
+        self.assertEqual(self.request("GET", "/api/state", headers={"X-App-Token": token})[0], 200)
 
 
 if __name__ == "__main__":

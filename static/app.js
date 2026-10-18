@@ -5,8 +5,8 @@ let currentSession;
 const $ = (id) => document.getElementById(id);
 const subjectNames = ["理论法", "刑法", "刑事诉讼法", "民事综合", "行政法", "商法"];
 $("source").elements.preset.addEventListener("change", event=>{
-  const selected={lijia:["李佳","行政法"],zuoning:["左宁","刑事诉讼法"]}[event.target.value];
-  if(selected){$("source").elements.name.value=selected[0];$("source").elements.subject.value=selected[1];$("source").elements.url.value=event.target.value==="lijia"?"https://weibo.com/u/1552849431":"https://weibo.com/u/3153511812";}
+  const selected={lijia:["行政法李佳","行政法","https://weibo.com/u/1552849431"],mengxiangui:["民商法孟献贵","民事综合","https://weibo.com/2342740757?refer_flag=1001030103_"],zuoning:["左宁刑诉","刑事诉讼法","https://weibo.com/u/3153511812"]}[event.target.value];
+  if(selected){$("source").elements.name.value=selected[0];$("source").elements.subject.value=selected[1];$("source").elements.url.value=selected[2];}
 });
 for (const select of document.querySelectorAll(".subject-select")) {
   const names = select.dataset.noGeneral ? subjectNames : ["综合", ...subjectNames];
@@ -56,7 +56,7 @@ function render() {
   for (const step of state.setup_steps) {
     const li=document.createElement("li");li.textContent=`${step.ready ? "✓" : "○"} ${step.name}${step.detail ? " · "+step.detail : ""}`;$("steps").append(li);
   }
-  const statuses={text_extracted:"文字已提取，题面与答案待核验",text_extracted_layout_unverified:"文字已提取，版式与图片待核验",ocr_pending:"已保存，等待识别图片文字",pdf_extractor_pending:"已保存，PDF文字提取尚需依赖",extraction_failed:"已保存原件，文字提取失败"};
+  const statuses={text_extracted:"文字已提取，题面与答案待核验",text_extracted_layout_unverified:"文字已提取，版式与图片待核验",ocr_pending:"已保存，等待识别图片文字",pdf_extractor_pending:"已保存，PDF文字提取尚需依赖",extraction_failed:"已保存原件，文字提取失败",original_saved:"已保存原件，由所选AI按需读取此格式",processing_pending:"原件已完整保存，由所选AI分段解析"};
   renderItems("materials",profile.materials,r=>r.name,r=>`${r.subject} · ${statuses[r.status] || r.status} · ${Math.ceil(r.size/1024)} KB`);
   renderItems("courses",profile.course_units,r=>r.title,r=>`${r.subject} · 实际完成日期 ${r.completed_on}`);
   const sourceStatus={disabled:"未启用",awaiting_browser:"等待所选AI浏览器",ready:"已具备读取条件",captured:"已保存实际读取结果",checked_no_items:"本次已读取，无条目",failed:"读取失败，需检查来源"};
@@ -97,7 +97,7 @@ actionButton("start-history",async()=>{const result=await operation("learning",{
 actionButton("start-theory",async()=>{const result=await operation("learning",{action:"theory_start",payload:{on:state.plan.day}});$("study-status").textContent="本轮完整主题："+result.activity.titles.join("、")+"。背完后向所选AI反馈，再按当前阶段继续；未反馈不记完成。";const view=$("question-view");view.hidden=false;view.replaceChildren();for(const theme of result.themes||[]){const p=document.createElement("p");p.textContent=theme.title+"\n"+theme.text;p.style.whiteSpace="pre-wrap";view.append(p);}$("response").hidden=true;});
 bind("response",async(form)=>{if(!currentSession)throw new Error("尚无待答题目");const result=await operation("learning",{action:"submit_answer",payload:{session_id:currentSession.id,on:state.plan.day,answer:form.elements.answer.value,complete:form.elements.complete.checked}});currentSession.status=result.status;displaySession(currentSession);form.elements.answer.value="";notice("真实答复已保存，请回到所选AI继续。");});
 bind("source-settings",async(form)=>{await operation("source",{action:"configure",payload:{source_id:form.elements.source_id.value,mode:form.elements.mode.value,enabled:form.elements.enabled.checked,identity_verification:form.elements.identity_verification.value,authorization:form.elements.authorization.value}});notice("来源设置已保存；实际采集状态见来源列表。");});
-actionButton("run-monitor",async()=>{const result=await request("/api/monitor",{});state=result.state;render();const rows=result.result.sources||[];$("background-result").textContent=result.result.status==="disabled"?"监测尚未启用，请先保存后台选择和单个来源授权。":`本次检查 ${rows.length} 个来源；${rows.filter(r=>r.status==="requires_client_browser").length} 个等待AI浏览器，${rows.filter(r=>r.status==="failed").length} 个读取失败。结果和待核验内容保存在同一个人实例。`;});
+actionButton("run-monitor",async()=>{const result=await request("/api/monitor",{});state=result.state;render();const rows=result.result.sources||[];$("background-result").textContent=result.result.status==="disabled"?"监测尚未启用，请先保存后台选择和单个来源授权。":result.result.status==="waiting_stage2"?result.result.reason:`本次检查 ${rows.length} 个来源；${rows.filter(r=>r.status==="requires_client_browser").length} 个等待AI浏览器，${rows.filter(r=>r.status==="failed").length} 个读取失败。结果和待核验内容保存在同一个人实例。`;});
 actionButton("prepare-schedule",async()=>{const result=await operation("schedule_enable",{instruction:"用户点击指定本机并生成定时任务文件，确认此机为唯一自动化设备"});$("background-result").textContent=`文件已生成：${result.directory}。尚未安装系统任务，请按docs/自动化与监测.md安装并核验实际运行。`;});
 for(const [id,value,evidence] of [["pause-study","paused","用户点击暂停学习"],["resume-study","active","用户点击恢复学习"]])actionButton(id,async()=>{const result=await request("/api/record",{record:{kind:"lifecycle",value,evidence}});state=result.state;render();notice(value==="paused"?"学习已暂停，真实进度保留。":"学习已恢复，按当前阶段继续。");});
 function bind(id, action) {
@@ -119,9 +119,11 @@ bind("settings",async(form)=>saveConfig({year:Number(form.elements.year.value),e
   authorization:{search_mode:form.elements.search_mode.value,scope:form.elements.scope.value,online_ai:form.elements.online_ai.checked}}));
 bind("material",async(form)=>{
   const file=form.elements.file.files[0];if(!file)throw new Error("请先选择文件");
-  if(file.size>10*1024*1024)throw new Error("单份资料上限10MB，请分批提供");
-  const content=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result.split(",")[1]);reader.onerror=reject;reader.readAsDataURL(file);});
-  const result=await request("/api/material",{name:file.name,content,subject:form.elements.subject.value,category:form.elements.category.value});
+  if(!state)throw new Error("个人实例尚在读取，请稍后再上传。");
+  notice("正在上传并保存原件，请等待完成…");
+  const response=await fetch("/api/material-upload",{method:"POST",headers:{"X-App-Token":token,"Content-Type":"application/octet-stream","X-File-Name":encodeURIComponent(file.name),"X-File-Subject":encodeURIComponent(form.elements.subject.value),"X-File-Category":form.elements.category.value,"X-Instance-Version":state.version},body:file});
+  const result=await response.json();
+  if(!response.ok){if(response.status===409)await load();throw new Error(result.error||"资料上传未完成");}
   state=result.state;render();form.reset();notice(result.result.duplicate?"这份资料已经导入，已跳过重复入库。":"资料已保存。提取状态见资料列表，尚未标记可出题或已学习。");
 });
 bind("automation",async(form)=>saveConfig({automation:{learning_requested:form.elements.learning_requested.checked,

@@ -51,6 +51,30 @@ def answer_current(question):
     return rows[-1] if rows else None
 
 
+def exercise_answer_history(data, row):
+    """合并旧版漏记的会话答复；不改原数据，不丢掉相同文本的真实多次作答。"""
+    history = [dict(r) for r in row.get("answer_history", [])]
+    linked = {(r.get("session_id"), r.get("answer_index")) for r in history if r.get("session_id")}
+    unmatched = set(i for i, r in enumerate(history) if not r.get("session_id"))
+    for session in data.get("sessions", []):
+        if session["question_id"] != row["question_id"]:
+            continue
+        for index, answer in enumerate(session.get("answers", [])):
+            if (session["id"], index) in linked:
+                continue
+            entry = {"on": answer["on"], "answer": answer["text"], "phase": answer["phase"],
+                     "mode": session["mode"], "session_id": session["id"], "answer_index": index,
+                     "complete": answer["complete"],
+                     "prompted": answer["phase"] == "correction" or (session["mode"] == "history" and not session.get("independent"))}
+            old = next((i for i in sorted(unmatched) if history[i]["on"] == entry["on"] and history[i]["answer"] == entry["answer"]), None)
+            if old is None:
+                history.append(entry)
+            else:
+                history[old].update(entry)
+                unmatched.remove(old)
+    return sorted(history, key=lambda r: r["on"])
+
+
 def question_view(q):
     # 显式白名单，答案、考点、旧错漏绝不随首次题面发送。
     return {k: q.get(k) for k in ("id", "identity", "source_name", "locator", "facts", "questions", "attachments", "kind")}
@@ -236,7 +260,8 @@ class LearningMixin:
                     if plan["stage"]["number"] == 3:
                         required(authorization, "第三阶段用户明确选择历史订正", 2000)
                     elif plan["historical_completed"] >= plan["historical_target"] and not authorization:
-                        raise ValueError("当日历史订正量已满或尚无当日案例完成")
+                        result.update({"available": False, "reason": "当日历史订正量已满或尚无当日案例完成；额外订正须明确选择"})
+                        return
                     cards = due_cards(data["errors"], day, plan["subjects"])
                     if payload.get("card_id"):
                         card = find(cards, payload["card_id"])
@@ -312,14 +337,18 @@ class LearningMixin:
                 if type(complete) is not bool:
                     raise ValueError("作答完成状态须为布尔值")
                 s["answers"].append({"phase": phase, "on": day, "text": answer, "complete": complete})
-                if phase == "first" and s["mode"] == "new":
-                    row = next((r for r in data["exercises"] if r["question_id"] == s["question_id"]), None)
-                    if row is None:
+                row = next((r for r in data["exercises"] if r["question_id"] == s["question_id"]), None)
+                if row is None:
+                    if phase == "first" and s["mode"] == "new":
                         row = {"id": str(uuid4()), "question_id": s["question_id"], "subject": s["subject"], "unit_id": s["unit_id"], "first_answer_on": day, "completed_on": None, "answer_history": []}
                         data["exercises"].append(row)
-                    row["answer_history"].append({"on": day, "answer": answer})
-                    if complete:
-                        row["completed_on"] = day
+                    else:
+                        raise ValueError("订正须关联已有真实首答记录")
+                row["answer_history"].append({"on": day, "answer": answer, "phase": phase, "mode": s["mode"],
+                    "session_id": s["id"], "answer_index": len(s["answers"])-1, "complete": complete,
+                    "prompted": phase == "correction" or (s["mode"] == "history" and not s["independent"])})
+                if phase == "first" and s["mode"] == "new" and complete:
+                    row["completed_on"] = day
                 if complete:
                     s["status"] = "awaiting_correction_grade" if phase == "correction" else "awaiting_grade"
                 data["checkpoint"] = {"kind": "learning", "session_id": s["id"], "status": s["status"]}
@@ -335,7 +364,7 @@ class LearningMixin:
                                "source_requires_recheck": bool(q.get("requires_source_recheck")),
                                "instruction": "按真实答复作语义评价；题源/司法规则和不同观点分列；AI参考不编正式分数。首答需要教学订正时只向用户讲知识点，待重答再给完整答案。"})
                 if s["status"] == "awaiting_knowledge":
-                    result["historical_answer"] = find(data["exercises"], q["id"], "question_id")["answer_history"]
+                    result["historical_answer"] = exercise_answer_history(data, find(data["exercises"], q["id"], "question_id"))
                     result["historical_error"] = find(data["errors"], s["card_id"])["detail"]
             elif action == "teach":
                 s = find(sessions, payload.get("session_id"))

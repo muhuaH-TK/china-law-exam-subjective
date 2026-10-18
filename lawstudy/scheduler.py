@@ -15,6 +15,7 @@ import time
 from xml.etree import ElementTree as ET
 
 from .policy import daily_plan
+from .monitor import monitor_gate
 from .store import atomic_bytes, utc_now
 
 
@@ -56,7 +57,7 @@ def tick(service, now=None):
         plan = daily_plan(data, day)
         previous = data.get("job_days", {}).get(day, {})
         monitor_report = None
-        if config["monitor_requested"] and clock >= config["monitor_time"] and "monitor" not in previous:
+        if config["monitor_requested"] and clock >= config["monitor_time"] and "monitor" not in previous and monitor_gate(data["config"], day)["eligible"]:
             monitor_report = service.monitor_once(day)
         _, version = service.store.snapshot()
         notifications = []

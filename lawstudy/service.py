@@ -6,10 +6,12 @@ from hashlib import sha256
 from importlib.util import find_spec
 import io
 import json
+import os
 from pathlib import Path
 import platform
 import re
 import sys
+import tempfile
 from urllib.parse import urlparse
 from uuid import uuid4
 import zipfile
@@ -20,8 +22,8 @@ from .store import Store, atomic_bytes, utc_now
 from .learning import LearningMixin
 from .monitor import MonitorMixin
 
-MAX_MATERIAL = 10 * 1024 * 1024
-ALLOWED = {".pdf", ".docx", ".md", ".txt", ".png", ".jpg", ".jpeg", ".webp"}
+# 仅限制同步自动解析的内存开销，不限制上传与原件保存。
+INLINE_PARSE_BYTES = 32 * 1024 * 1024
 
 
 def object_only(value, name):
@@ -70,7 +72,7 @@ def extract_material(raw, suffix):
     if suffix == ".docx":
         with zipfile.ZipFile(io.BytesIO(raw)) as archive:
             if sum(i.file_size for i in archive.infolist()) > 30 * 1024 * 1024:
-                raise ValueError("文档解压内容过大，请分批提供资料")
+                raise ValueError("文档解压内容较大，原件已保留，需由所选AI分段解析")
             xml = archive.read("word/document.xml")
             if b"<!DOCTYPE" in xml.upper():
                 raise ValueError("不支持含外部文档声明的Word文件")
@@ -85,7 +87,9 @@ def extract_material(raw, suffix):
         pages = [p.extract_text() or "" for p in reader.pages]
         result = "\n\n".join(f"[物理第{i+1}页]\n{value}" for i, value in enumerate(pages))
         return (result, "text_extracted_layout_unverified") if any(p.strip() for p in pages) else ("", "ocr_pending")
-    return "", "pdf_extractor_pending" if suffix == ".pdf" else "ocr_pending"
+    if suffix == ".pdf":
+        return "", "pdf_extractor_pending"
+    return "", "ocr_pending" if suffix in (".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff") else "original_saved"
 
 
 class Service(LearningMixin, MonitorMixin):
@@ -202,17 +206,24 @@ class Service(LearningMixin, MonitorMixin):
         self.store.update(version, action)
 
     def import_material(self, name, raw, subject, category, version, origin=None):
+        return self.import_stream(name, io.BytesIO(raw), subject, category, version, origin)
+
+    def import_file(self, path, subject, category, version, origin=None):
+        path = Path(path).expanduser()
+        if not path.is_file():
+            raise ValueError("请选择实际存在的单份资料文件，不能传入目录")
+        with path.open("rb") as handle:
+            return self.import_stream(path.name, handle, subject, category, version, origin)
+
+    def import_stream(self, name, stream, subject, category, version, origin=None, length=None):
+        """分块保存任意格式与大小的用户原件；没有整文件base64和内存复制。"""
         name = text(name, "文件名", 300)
+        if not name:
+            raise ValueError("请提供文件名")
         suffix = Path(name.replace("\\", "/")).suffix.lower()
-        if suffix not in ALLOWED:
-            raise ValueError("当前仅接收PDF、DOCX、TXT、Markdown和常见图片")
-        if not raw or len(raw) > MAX_MATERIAL:
-            raise ValueError("文件为空或超过10MB，请分批提供资料")
-        if subject not in SUBJECTS and subject != "综合":
-            raise ValueError("资料科目无效")
+        subject = text(subject, "资料科目", 300) or "综合"
         if category not in ("textbook", "course", "theory", "questions", "other"):
             raise ValueError("资料用途无效")
-        digest = sha256(raw).hexdigest()
         if origin is not None:
             object_only(origin, "资料出处")
             if set(origin)-{"kind", "url", "evidence", "author", "year_version", "import_authorization"}:
@@ -222,7 +233,30 @@ class Service(LearningMixin, MonitorMixin):
             check_url(text(origin.get("url"), "检索原始网址", 2000))
             if not origin.get("url") or not text(origin.get("evidence"), "实际检索与导入依据", 10000):
                 raise ValueError("检索导入须有原始网址和实际依据")
-        result = {}
+        # 先检查版本，避免已知失效的上传继续占用磁盘；最终保存仍在锁内核对。
+        if self.store.snapshot()[1] != version:
+            from .store import ConflictError
+            raise ConflictError("内容已变化，请重新读取并合并后保存")
+        result, size, hasher = {}, 0, sha256()
+        with tempfile.NamedTemporaryFile(dir=self.store.directory, prefix=".upload-", delete=False) as handle:
+            staged = Path(handle.name)
+            try:
+                while length is None or size < length:
+                    chunk = stream.read(1024*1024 if length is None else min(1024*1024, length-size))
+                    if not chunk:
+                        if length is not None and size != length:
+                            raise ValueError("文件传输尚未完成，未登记资料，请重新上传")
+                        break
+                    handle.write(chunk)
+                    hasher.update(chunk)
+                    size += len(chunk)
+                handle.flush()
+                os.fsync(handle.fileno())
+            except BaseException:
+                handle.close()
+                staged.unlink(missing_ok=True)
+                raise
+        digest = hasher.hexdigest()
         def action(data):
             if origin is not None:
                 auth = data["config"]["authorization"]
@@ -235,20 +269,26 @@ class Service(LearningMixin, MonitorMixin):
                 result.update({"duplicate": True, "material": existing})
                 return
             extraction_error = None
+            stored_suffix = suffix if re.fullmatch(r"\.[a-z0-9]{1,16}", suffix) else ".bin"
+            relative = f"materials/{digest}{stored_suffix}"
+            destination = self.store.directory / relative
+            destination.parent.mkdir(exist_ok=True)
+            os.replace(staged, destination)
             try:
-                extracted, status = extract_material(raw, suffix)
+                if size > INLINE_PARSE_BYTES:
+                    extracted, status = "", "processing_pending"
+                else:
+                    extracted, status = extract_material(destination.read_bytes(), suffix)
             except Exception as exc:
                 # 外部格式解析失败仍保留原件；不把失败冒称已读到完整内容。
                 extracted, status = "", "extraction_failed"
                 extraction_error = str(exc)[:200]
-            relative = f"materials/{digest}{suffix}"
-            atomic_bytes(self.store.directory / relative, raw)
             text_path = None
             if extracted:
                 text_path = f"extracted/{digest}.txt"
                 atomic_bytes(self.store.directory / text_path, extracted.encode("utf-8"))
             material = {"id": str(uuid4()), "name": name, "subject": subject, "category": category,
-                "sha256": digest, "size": len(raw), "format": suffix, "path": relative,
+                "sha256": digest, "size": size, "format": suffix, "path": relative,
                 "text_path": text_path, "status": status, "error": extraction_error,
                 "question_ready": False, "source_kind": "user_provided", "year_version": "待核实",
                 "author": None, "imported_at": utc_now()}
@@ -258,7 +298,10 @@ class Service(LearningMixin, MonitorMixin):
                                 author=text(origin.get("author", "待核实"), "资料作者", 300))
             data["materials"].append(material)
             result.update({"duplicate": False, "material": material})
-        self.store.update(version, action)
+        try:
+            self.store.update(version, action)
+        finally:
+            staged.unlink(missing_ok=True)
         return result
 
     def add_source(self, payload, version):

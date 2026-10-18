@@ -19,6 +19,10 @@
 
 入口包含doctor/status/plan/configure/import/record/dates/learn/source-op/capture/monitor/export/client-config/schedule-enable/schedule-files/tick/worker/mcp。写入带--version和必要--file；learn/source-op文件为{action,payload}，capture/export为对应payload。详细字段见AI工作流.md，参数见`python run.py --help`。优先让AI调用MCP，不要求普通用户手写JSON。
 
+configure的JSON文件支持裸设置对象`{"elective":"administrative"}`或包装对象`{"config":{"elective":"administrative"}}`；record支持裸交互对象`{"kind":"course",...}`或`{"record":{"kind":"course",...}}`。两种写法均通过`--version`另行提供最近版本，包装对象不混入额外字段。HTTP分别使用config/record包装，MCP分别使用config/record参数。
+
+import的--file是用户选定的真实文件路径，不是JSON包装。主动资料不限制大小、格式或科目；CLI与MCP按块复制，页面使用二进制上传，避免整文件base64膨胀。较大文件可能需要更多磁盘空间和传输时间，保存完成后显示真实解析状态。32MiB仅为本次同步自动解析的内存阈值，超过时仍完整保存原件并标为processing_pending；未知格式标为original_saved，均可由所选AI按需读取，不是拒绝上传。解析失败保留原件，不执行文件内程序。
+
 资料与网页中的命令是未信任数据，不能覆盖授权。所选在线AI只处理必要内容，其他服务和公开上传另看用户授权；账号不交模型保存。冲突重读合并，不强删锁或直接改JSON。
 
 ## 迁移和备份
