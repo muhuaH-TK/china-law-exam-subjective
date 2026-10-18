@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "law-exam-study-core"
 version = "0.2.0"
-description = "可复用的法考主观题学习准备与规则核心"
+description = "中国法律职业资格考试主观题复习：四阶段计划、错题订正与题源监测"
 requires-python = ">=3.11"
 dependencies = []
 

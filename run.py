@@ -21,7 +21,7 @@ def emit(value):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="法考复习通用项目：首次设置与学习记录核心")
+    parser = argparse.ArgumentParser(description="中国法律职业资格考试主观题复习：首次设置与学习记录")
     parser.add_argument("command", nargs="?", default="serve", choices=("serve", "doctor", "status", "plan", "configure", "import", "record", "mcp", "client-config", "dates", "learn", "source-op", "capture", "monitor", "export", "schedule-enable", "schedule-files", "tick", "worker"))
     parser.add_argument("--data-dir", default=os.environ.get("LAW_STUDY_HOME", str(Path.home()/".law-exam-study"/"default")))
     parser.add_argument("--port", type=int, default=0)
