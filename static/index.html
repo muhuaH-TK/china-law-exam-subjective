@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="app-token" content="__APP_TOKEN__">
+  <title>法考复习 · 开始准备</title><link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+<header><span class="eyebrow">法考主观题 · 个人学习工作区</span><h1>从你的资料和进度开始</h1>
+<p>设置可以分步补齐。学习记录留在你的个人实例中，课程、背诵和案例分别推进。</p></header>
+<main>
+  <div id="notice" role="status" aria-live="polite"></div>
+  <section class="overview"><div><h2>下一步</h2><p id="next-action">正在读取个人实例…</p></div><ol id="steps"></ol></section>
+  <div class="columns">
+  <section><span class="step-label">01 / 基本设置</span><h2>确认这一轮备考</h2>
+    <form id="settings">
+      <label>备考年度<input name="year" type="number" min="2000" max="2100" placeholder="例如：2027" required></label>
+      <label>后台任务时区<input name="timezone" value="Asia/Hong_Kong" placeholder="例如：Asia/Hong_Kong" required></label>
+      <label>本年度主观题安排<select name="participation"><option value="undecided">尚未确定</option><option value="participating">准备参加本年度主观题</option><option value="not_participating">本年度暂不参加</option></select></label>
+      <label>行政法 / 商法选做方向<select name="elective"><option value="undecided">尚未确定，两科都保留</option><option value="administrative">选择行政法，排除商法</option><option value="commercial">选择商法，排除行政法</option></select></label>
+      <label>使用的AI工具<select name="selected_ai"><option value="workbuddy">WorkBuddy</option><option value="codex">Codex</option><option value="other">其他具备文件与执行能力的AI</option></select></label>
+      <label>背诵参考字数<input name="theory_target_chars" type="number" min="200" max="10000" value="1000"></label><p class="hint">以完整主题为限，长主题不拆分，短主题可组合。</p>
+      <label>当前适用阶段<select name="stage_override"><option value="">待官方日期核验后推荐</option><option value="1">第一阶段：课程单元学习</option><option value="2">第二阶段：背诵填空与每日三题</option><option value="3">第三阶段：背诵默写与每日五题</option><option value="4">第四阶段：考前资料与聚焦学习</option></select></label>
+      <p class="hint">保存年度后可检索司法部公告；联网失败时，在所选AI中继续官方检索。日期缺少或冲突时保留待核验，不套用往年日期。</p>
+      <label>资料检索模式<select name="search_mode"><option value="provided_only">仅使用我主动提供的资料</option><option value="search_only">允许范围内搜索，先展示候选</option><option value="search_and_import">允许范围内搜索并导入</option></select></label>
+      <label>检索范围<textarea name="scope" rows="2" placeholder="例如：所选年度刑法、刑诉课程讲义，仅限公开可访问资料"></textarea></label>
+      <label class="check"><input name="online_ai" type="checkbox">允许所选在线AI处理本次学习所需资料与作答</label>
+      <p class="hint">这不包含公开发布资料或上传任意第三方网站。当前页面本身不向外发送资料。</p>
+      <button type="submit">保存设置</button>
+    </form>
+  </section>
+  <div>
+  <section><span class="step-label">02 / 学习资料</span><h2>先提供一份资料</h2><p>可先导入教材、讲义或理论背诵材料，其余以后补充。</p>
+    <form id="material"><label>选择文件<input name="file" type="file" accept=".pdf,.docx,.md,.txt,.png,.jpg,.jpeg,.webp" required></label>
+      <div class="inline"><label>对应科目<select name="subject" class="subject-select"></select></label><label>资料用途<select name="category"><option value="textbook">教材</option><option value="course">课程讲义 / 目录</option><option value="theory">理论背诵材料</option><option value="questions">题目与答案</option><option value="other">其他资料</option></select></label></div>
+      <p class="hint">每份上限10MB。保留导入副本并查重，不覆盖原文件；提取文字不代表题面、图片或答案已经核验。</p><button type="submit">导入个人资料库</button>
+    </form><ul id="materials" class="items"></ul>
+  </section>
+  <section><span class="step-label">03 / 已完成课程</span><h2>按实际进度开始</h2><form id="course">
+    <label>已经学完的单元<input name="title" placeholder="填写课程与单元名称" required></label>
+    <label>科目<select name="subject" class="subject-select" data-no-general="true"></select></label>
+    <label>完成反馈<textarea name="evidence" rows="2" placeholder="例如：已看完本单元课程，并阅读对应讲义" required></textarea></label><button type="submit">登记实际完成</button>
+  </form><ul id="courses" class="items"></ul></section>
+  </div></div>
+  <section><h2>考试日期与AI连接</h2><p>先保存年度，再检索适用公告。两款AI共用同一个人实例。</p><div class="inline"><button type="button" id="refresh-dates">检索官方考试日期</button><button type="button" id="client-config" class="secondary">生成我的AI连接文件</button></div><ul id="exam-dates" class="items"></ul><p id="integration-result" class="hint"></p></section>
+  <section><span class="step-label">04 / 当前安排</span><h2>阶段与学习方向</h2><div id="plan" class="plan-grid"></div><p id="plan-note" class="hint"></p></section>
+  <section><h2>继续学习</h2><p>由你选择的AI核验资料中的完整原题与答案，再通过同一实例出题和讲评。这里可以开始或续答已经核验的题。</p><div class="inline"><button type="button" id="start-case">开始 / 继续案例</button><button type="button" id="start-history" class="secondary">我选择历史订正</button><button type="button" id="start-theory" class="secondary">开始理论背诵</button></div><p id="study-status" class="hint"></p><article id="question-view" hidden></article><form id="response" hidden><label>你的实际作答<textarea name="answer" rows="8" required></textarea></label><label class="check"><input name="complete" type="checkbox" checked>本次已答完；未答完可先保存进度</label><button type="submit">保存作答，交给AI继续讲评</button></form><div class="inline"><button type="button" id="pause-study" class="secondary">暂停学习</button><button type="button" id="resume-study" class="secondary">恢复学习</button></div></section>
+  <section><span class="step-label">05 / 后台设置</span><h2>保留自动化与题源监测</h2>
+    <p class="hint">本机运行器支持定时提醒与公开订阅采集；微博等来源由所选AI的实际浏览器读取。保存后，还需启动运行器或安装本实例的系统任务；不会启用原作者的任务。</p>
+    <form id="automation"><div class="inline">
+      <label class="check"><input name="learning_requested" type="checkbox">以后启用学习提醒</label><label>提醒时间<input name="learning_time" type="time" value="09:30"></label>
+      <label class="check"><input name="monitor_requested" type="checkbox">以后启用题源监测</label><label>监测时间<input name="monitor_time" type="time" value="22:00"></label>
+      <label>每日处理上限<input name="daily_limit" type="number" min="1" max="100" value="10"></label>
+    </div><button type="submit">保存后台设置</button></form>
+    <form id="source"><label>预置候选<select name="preset"><option value="">自行补充来源</option><option value="lijia">李佳 · 行政法（补充并核验主页）</option><option value="zuoning">左宁 · 刑事诉讼法（补充并核验主页）</option></select></label><div class="inline"><label>来源名称<input name="name" required placeholder="老师或机构名称"></label><label>主页或来源网址<input name="url" type="url" required placeholder="https://…"></label><label>科目<select name="subject" class="subject-select" data-no-general="true"></select></label></div><button type="submit" class="secondary">登记候选来源</button></form>
+    <ul id="sources" class="items"></ul>
+    <form id="source-settings"><h3>启用或关闭一个来源</h3><label>已登记来源<select name="source_id" id="source-picker"></select></label><label>读取方式<select name="mode"><option value="browser">由所选AI浏览器读取</option><option value="rss">公开RSS / Atom订阅</option><option value="json">公开JSON Feed</option></select></label><label class="check"><input name="enabled" type="checkbox">允许持续监测这个来源</label><label>当前身份核验<textarea name="identity_verification" rows="2" placeholder="记录真实账号名称、主页与科目核对结果"></textarea></label><label>授权范围<textarea name="authorization" rows="2" placeholder="例如：允许持续读取此老师主页内的当年每日一题及其答案"></textarea></label><button type="submit">保存来源授权</button></form>
+    <div class="inline"><button type="button" id="run-monitor" class="secondary">现在检查已授权来源</button><button type="button" id="prepare-schedule" class="secondary">指定本机并生成定时任务文件</button></div><p id="background-result" class="hint"></p>
+  </section>
+  <section><h2>可选补充能力</h2><p>已有同类能力时不必重复安装。按你使用的AI工具，选择需要的技能；安装后仍需检查能否实际调用。</p><ul><li><a href="https://github.com/anthropics/skills/tree/main/skills/pdf" target="_blank" rel="noopener noreferrer">PDF技能</a>：教材和PDF资料处理。</li><li><a href="https://github.com/anthropics/skills/tree/main/skills/docx" target="_blank" rel="noopener noreferrer">Word技能</a>：复习文档整理。</li><li><a href="https://github.com/THUYRan/Legal-Skills-Chinese" target="_blank" rel="noopener noreferrer">中国法辅助技能</a>：按需选取检索、效力核验、概念和论证技能。</li></ul><p class="hint">这些是上游候选链接，尚未完成本项目双工具兼容验收。法律检索仍需要可用且获授权的数据来源。</p></section>
+  <footer>本地资料与进度共用 · 语义讲评由所选AI完成 · 不把配置、导入或资料交付记为学习完成</footer>
+</main></body></html>

@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "law-exam-study-core"
+version = "0.2.0"
+description = "可复用的法考主观题学习准备与规则核心"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+pdf = ["pypdf"]
+export = ["reportlab>=4.0,<5", "pypdf>=5,<7"]
+
+[tool.setuptools]
+packages = ["lawstudy"]
+
+# 当前发行入口是完整源码目录中的run.py；不声明尚未验证的安装后命令。
