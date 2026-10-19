@@ -17,9 +17,9 @@ from uuid import uuid4
 import zipfile
 from xml.etree import ElementTree
 
-from .policy import SUBJECTS, daily_plan, iso, next_due, review_card, subjects
+from .policy import SUBJECTS, daily_plan, iso, next_due, review_card, subjects, stage_alignment
 from .store import Store, atomic_bytes, utc_now
-from .learning import LearningMixin
+from .learning import LearningMixin, actual_answer
 from .monitor import MonitorMixin
 
 # 仅限制同步自动解析的内存开销，不限制上传与原件保存。
@@ -92,6 +92,38 @@ def extract_material(raw, suffix):
     return "", "ocr_pending" if suffix in (".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff") else "original_saved"
 
 
+def material_readiness(data, plan):
+    """只返回数量和补充动作；原件数量不能冒充完整可用题数。"""
+    from .learning import answer_current
+    n = plan["stage"]["number"]
+    used = {r["question_id"] for r in data["exercises"]}
+    used.update(s["question_id"] for s in data.get("sessions", []))
+    used_identities = {r["question_id"] for r in data["exercises"]}
+    pool = [q for q in data.get("questions", []) if q["id"] not in used and q["identity"] not in used_identities
+            and q["subject"] in plan["subjects"] and q["kind"] == "original" and answer_current(q)
+            and not q.get("requires_source_recheck") and q.get("status") != "obsolete_source_changed"
+            and not (n == 2 and q["subject"] == "理论法")]
+    if n == 1:
+        units = {u["id"] for u in data["course_units"] if u["completed_on"] <= plan["day"]
+                 and u.get("assessment_status") != "skipped_no_original"
+                 and sum(r.get("unit_id") == u["id"] for r in data["exercises"]) < data["config"]["questions_per_unit"]}
+        pool = [q for q in pool if q["textbook_original"] and units.intersection(q["unit_ids"])]
+    recommendations = plan.get("recommended_subjects", [])
+    eligible_count = len({q["subject"] for q in pool if q["subject"] in recommendations}) if n in (2, 3) else len(pool)
+    target = max(0, plan["case_remaining"]-len(plan["resume_first"])) if n in (1, 2, 3) else 0
+    versions = data.get("theory_versions", [])
+    themes = [t for t in data.get("themes", []) if versions and t["material_id"] == versions[-1]["material_id"]]
+    theory_materials = sum(m["category"] == "theory" for m in data["materials"])
+    messages = []
+    if target > eligible_count:
+        messages.append("当前阶段可用原题不足：补充完整题面与同题答案；已存PDF/照片先核验登记。第一阶段可核验教材无原题后跳过，需自拟必须由用户明确要求。")
+    if n in (2, 3, 4) and not themes:
+        messages.append("理论材料已保存但尚未核验完整主题，请先整理主题。" if theory_materials else "请提供理论背诵材料或按已授权范围检索；缺理论不阻断案例。")
+    return {"unused_verified_originals": len(pool), "available_slots": eligible_count, "remaining_new_slots": target,
+            "case_shortfall": max(0, target-eligible_count), "theory_materials": theory_materials,
+            "verified_themes": len(themes), "messages": messages}
+
+
 class Service(LearningMixin, MonitorMixin):
     def __init__(self, directory):
         self.store = Store(directory)
@@ -101,6 +133,13 @@ class Service(LearningMixin, MonitorMixin):
         day = day or today_in(data["config"]["timezone"])
         plan = daily_plan(data, day)
         config = data["config"]
+        alignment = stage_alignment(config, day)
+        previous_selection = (data.get("stage_selection_history") or [{}])[-1]
+        alignment["confirmation_recorded"] = bool(previous_selection.get("confirmation")
+            and previous_selection.get("selected") == alignment["selected"]
+            and previous_selection.get("calendar") == alignment["calendar"])
+        if alignment["confirmation_recorded"]:
+            alignment["requires_confirmation"] = False
         steps = [
             {"name": "年度与备考状态", "ready": bool(config["year"]) and config["participation"] != "undecided"},
             {"name": "选做方向", "ready": True, "detail": "未确定时保留六科轮换" if config["elective"] == "undecided" else "已明确"},
@@ -127,19 +166,25 @@ class Service(LearningMixin, MonitorMixin):
         safe = {k: data[k] for k in ("schema_version", "instance_id", "revision", "lifecycle", "config", "materials", "course_units", "sources", "checkpoint")}
         safe["checkpoints"] = data.get("checkpoints", {})
         return {"version": version, "profile": safe, "plan": plan, "setup_steps": steps,
+                "stage_alignment": alignment, "material_readiness": material_readiness(data, plan),
                 "next_action": next_action, "capabilities": capabilities()}
 
     def configure(self, payload, version):
         object_only(payload, "设置")
-        allowed = {"year", "elective", "participation", "selected_ai", "timezone", "stage_override", "questions_per_unit", "theory_target_chars", "exam_dates", "authorization", "automation"}
+        allowed = {"year", "elective", "participation", "selected_ai", "timezone", "stage_override", "stage_confirmation", "questions_per_unit", "theory_target_chars", "exam_dates", "authorization", "automation"}
         if set(payload)-allowed:
             raise ValueError("设置含未知字段")
         def action(data):
             config = data["config"]
+            old_year = config["year"]
             for k, value in payload.items():
+                if k == "stage_confirmation":
+                    if not text(value, "错位阶段的用户确认依据", 5000):
+                        raise ValueError("错位阶段须有用户明确确认")
+                    continue
                 if k == "year" and (type(value) is not int or not 2000 <= value <= 2100):
                     raise ValueError("请填写2000至2100之间的备考年度")
-                if k == "year" and config["year"] not in (None, value) and any(data[key] for key in ("exercises", "errors", "course_units")):
+                if k == "year" and config["year"] not in (None, value) and any(data.get(key) for key in ("exercises", "errors", "course_units", "sessions", "theory_activities")):
                     raise ValueError("此实例已有学习记录；新年度请使用新的个人实例目录，不覆盖旧年度")
                 if k == "elective":
                     subjects(value)
@@ -194,12 +239,26 @@ class Service(LearningMixin, MonitorMixin):
                             raise ValueError("已核验日期必须有日期、官方网址与依据")
                     data.setdefault("calendar_manual_history", []).append({"at": utc_now(), "before": config["exam_dates"], "after": value})
                 config[k] = value
+            if old_year is not None and old_year != config["year"]:
+                if "exam_dates" not in payload:
+                    data.setdefault("calendar_manual_history", []).append({"at": utc_now(), "year": old_year,
+                        "before": config["exam_dates"], "reason": "无学习记录换年，旧日期仅归档"})
+                    config["exam_dates"] = {k: {"date": None, "status": "pending", "source_url": "", "evidence": ""}
+                                            for k in ("objective_end", "results", "subjective")}
+                if "stage_override" not in payload:
+                    config["stage_override"] = None
             dates = config["exam_dates"]
             present = [dates[k]["date"] for k in ("objective_end", "results", "subjective") if dates[k]["date"]]
             if present != sorted(set(present)):
                 raise ValueError("考试日期应按客观结束、成绩公布、主观考试依次递增")
             if any(d[:4] != str(config["year"]) for d in present):
                 raise ValueError("考试日期年度与备考年度不符，请核对")
+            alignment = stage_alignment(config, today_in(config["timezone"]))
+            if ("stage_override" in payload or "exam_dates" in payload) and alignment["requires_confirmation"] and not payload.get("stage_confirmation"):
+                raise ValueError("手动阶段与已核验考期不一致；先说明差异，待用户明确确认后提供stage_confirmation；也可将stage_override设为null按日期安排")
+            if "stage_override" in payload:
+                data.setdefault("stage_selection_history", []).append({"at": utc_now(), "selected": config["stage_override"],
+                    "calendar": alignment["calendar"], "confirmation": payload.get("stage_confirmation")})
             if data["lifecycle"] == "setup" and config["year"]:
                 data["lifecycle"] = "active"
             data["events"].append({"kind": "settings", "at": utc_now(), "fields": sorted(payload)})
@@ -382,7 +441,7 @@ class Service(LearningMixin, MonitorMixin):
                 if subject not in subjects(data["config"]["elective"]):
                     raise ValueError("题目超出生效科目")
                 identity = text(payload.get("question_id"), "原题身份", 500)
-                answer = text(payload.get("answer"), "用户原答")
+                answer = actual_answer(payload.get("answer"))
                 if not identity or not answer:
                     raise ValueError("须有原题身份和用户真实原答")
                 iso(payload["on"])
@@ -420,6 +479,16 @@ class Service(LearningMixin, MonitorMixin):
                 row = next((r for r in data["exercises"] if r["question_id"] == question_id), None)
                 if row is None:
                     raise ValueError("须关联已有真实作答，不能因导入材料建错")
+                if not row.get("answer_history"):
+                    raise ValueError("须有用户真实作答，不能仅以待答状态建卡")
+                real_answers = []
+                for entry in row["answer_history"]:
+                    try:
+                        real_answers.append(actual_answer(entry.get("answer")))
+                    except ValueError:
+                        continue
+                if not real_answers:
+                    raise ValueError("关联记录只有占位内容，没有用户真实作答，不能建错题卡")
                 detail = text(payload.get("detail"), "实际错漏", 5000)
                 if not detail:
                     raise ValueError("须记录具体错漏")
@@ -450,7 +519,7 @@ class Service(LearningMixin, MonitorMixin):
                 if payload.get("prompted") is False or payload.get("independent_pass"):
                     if not text(payload.get("authorization", ""), "用户要求独立检测的依据", 2000):
                         raise ValueError("正式独立检测须有用户明确指令")
-                review_card(card, day, text(payload.get("answer"), "用户订正原答"),
+                review_card(card, day, actual_answer(payload.get("answer")),
                     boolean(payload.get("prompted", True), "提示状态"),
                     boolean(payload.get("independent_pass", False), "独立通过状态"))
             elif kind == "lifecycle":

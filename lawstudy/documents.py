@@ -173,7 +173,7 @@ def build_sections(data, payload, pages=None):
     nav = []
     for i, topic in enumerate(selected):
         page = (pages or {}).get(f"topic-{i}")
-        nav.append(topic["title"]+(f"：PDF第{page}页。" if page else "。")+required(topic.get("navigation"), "浏览导航中的实质规则与分支摘要", 10000))
+        nav.append(topic["title"]+(f"：PDF第{page}页。" if page else "。")+required(topic.get("navigation"), f"topics[{i}].navigation（必填实质规则与分支摘要，1—10000字符）", 10000))
     sections.append({"key": "navigation", "title": "知识点浏览导航", "blocks": nav, "new_page": True})
     return sections
 
@@ -184,6 +184,9 @@ def export_topic(service, payload, version):
         raise ValueError("实例已变化，请重读后整理")
     title = required(payload.get("title"), "专题名称", 200)
     sections = build_sections(data, payload)
+    missing = [name for name in ("reportlab", "pypdf") if not find_spec(name)]
+    if missing:
+        raise ValueError("导出缺少可选依赖："+"、".join(missing)+"；请由AI在当前Python环境安装运行核心的requirements-export.txt后重试（python -m pip install -r requirements-export.txt），日常学习不受影响")
     pdf, pages = pdf_bytes(title, sections)
     # 页码文字会改变分页；固定点迭代后再核验最终映射，而非沿用第一次页数。
     for _ in range(6):

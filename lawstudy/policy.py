@@ -47,6 +47,19 @@ def stage(config, day):
     return {"number": number, "status": "verified_dates", "reason": "依据已核验官方日期"}
 
 
+def stage_alignment(config, day):
+    automatic = stage({**config, "stage_override": None}, day)
+    selected = config.get("stage_override")
+    mismatch = bool(selected and (automatic["status"] == "finished" or
+                    (automatic["number"] is not None and selected != automatic["number"])))
+    warnings = []
+    if mismatch:
+        warnings.append("手动阶段与已核验考期不一致；确认实际学习目标后才保留该阶段，第四阶段为考前7日至前1日。")
+    elif selected and selected > 1 and config.get("year") and config["year"] > iso(day).year:
+        warnings.append("备考年度尚未开始，却选择了第二至四阶段；请核对是否为测试或主动提前采用该模式，不据此推定官方考期。")
+    return {"selected": selected, "calendar": automatic, "requires_confirmation": mismatch, "warnings": warnings}
+
+
 def balanced_subjects(pool, records, limit, errors=None):
     """先覆盖练习较少者，再比较最近完成日；稳定顺序用于平局。"""
     def key(subject):
@@ -133,7 +146,7 @@ def daily_plan(data, day):
     history = [r for r in records if r.get("completed_on") and r["completed_on"] <= day]
     candidates = due_cards(data["errors"], day, active) if number in (1, 2) else []
     done_reviews = sum(any(r["on"] == day for r in c.get("reviews", []))
-                       for c in data["errors"] if c["subject"] in active)
+                       for c in data["errors"] if c["subject"] in active and c.get("status") != "obsolete")
     historical_target = len(completed) if number in (1, 2) else 0
     remaining = max(0, limit - len(completed))
     if number in (2, 3):

@@ -4,6 +4,7 @@ from hashlib import sha256
 import json
 from pathlib import Path
 import re
+import unicodedata
 from uuid import uuid4
 
 from .policy import daily_plan, due_cards, iso, next_due, review_card, subjects, theme_group
@@ -22,6 +23,15 @@ def required(value, name, maximum=100000):
 
 def fingerprint(facts, questions):
     return sha256(re.sub(r"\s+", "", facts+"\n"+"\n".join(questions)).encode()).hexdigest()
+
+
+def actual_answer(value):
+    answer = required(value, "用户实际作答")
+    normalized = unicodedata.normalize("NFKC", answer).casefold()
+    normalized = re.sub(r"[\s()（）\[\]【】<>《》:：。.!！_—-]", "", normalized)
+    if normalized in ("", "未作答", "未答", "待作答", "待答", "占位", "占位内容", "占位答案", "placeholder"):
+        raise ValueError("占位内容不能作为真实作答保存；保留原待答状态，等待用户答复")
+    return answer
 
 
 def active(data, day):
@@ -299,7 +309,9 @@ class LearningMixin:
                     if payload.get("question_id"):
                         pool = [q for q in pool if q["id"] == payload["question_id"]]
                     if not pool:
-                        result.update({"available": False, "reason": "没有符合阶段、完整性、答案和查重条件的题源；需补充资料，不自动凑题"})
+                        reason = ("第一阶段没有对应已完成单元的适配教材原题；可核验后unit_skip跳过，或补教材；只有用户明确要求才自拟具体案例。已有真题保留第二阶段以后使用。"
+                                  if n == 1 else "没有符合阶段、完整性、答案和查重条件的题源；需补充资料，不自动凑题")
+                        result.update({"available": False, "reason": reason})
                         return
                     ranks = plan["recommended_subjects"]
                     q = sorted(pool, key=lambda x: (x["priority"], ranks.index(x["subject"]) if x["subject"] in ranks else 99, x["created_at"]))[0]
@@ -329,7 +341,7 @@ class LearningMixin:
                     raise ValueError("当前阶段不要求作答；原待答记录保留，不阻断复习资料")
                 if s["status"] not in ("awaiting_answer", "awaiting_correction"):
                     raise ValueError("当前环节不接收作答，先完成评价")
-                answer = required(payload.get("answer"), "用户实际作答")
+                answer = actual_answer(payload.get("answer"))
                 if day < s["issued_on"] or (s["answers"] and day < s["answers"][-1]["on"]):
                     raise ValueError("不能倒写作答日期")
                 phase = "correction" if s["status"] == "awaiting_correction" else "first"
@@ -383,6 +395,7 @@ class LearningMixin:
                 plan = active(data, day)
                 if s["status"] not in ("awaiting_grade", "awaiting_correction_grade"):
                     raise ValueError("没有待评价的真实作答")
+                actual_answer(s["answers"][-1]["text"])
                 if day < s["answers"][-1]["on"]:
                     raise ValueError("评价日期早于作答")
                 explanation = full_explanation(payload.get("explanation"))
@@ -529,6 +542,22 @@ class LearningMixin:
                 a["evaluation"] = required(payload.get("evaluation"), "语义评价、遗漏与必要参考表达")
                 a["status"], a["completed_on"] = "completed", a["feedback"][-1]["on"]
                 result.update({"status": "completed", "evaluation": a["evaluation"]})
+            elif action == "void_card":
+                card = find(data["errors"], payload.get("card_id"))
+                reason = required(payload.get("reason"), "误登记作废的具体原因", 5000)
+                instruction = required(payload.get("user_instruction"), "用户要求作废的实际依据", 5000)
+                if card.get("status") == "obsolete":
+                    raise ValueError("该卡已退出轮候，不重复作废")
+                card.setdefault("void_history", []).append({"at": utc_now(), "previous_status": card["status"],
+                                                           "reason": reason, "user_instruction": instruction})
+                card["status"] = "obsolete"
+                for session in sessions:
+                    if session.get("card_id") == card["id"] and session["status"] not in ("completed", "skipped"):
+                        session.update(status="skipped", skip_reason="关联错题卡已作废："+reason)
+                        checkpoint = {"kind": "learning", "session_id": session["id"], "status": "skipped"}
+                        data["checkpoint"] = checkpoint
+                        data.setdefault("checkpoints", {})["case"] = dict(checkpoint)
+                result.update({"card_id": card["id"], "status": "obsolete", "history_preserved": True})
             elif action == "skip":
                 s = find(sessions, payload.get("session_id"))
                 required(payload.get("reason"), "用户跳过原因", 2000)

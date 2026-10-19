@@ -2,11 +2,11 @@
 
 面向中国法律职业资格考试主观题的四阶段复习项目。GitHub仓库：[china-law-exam-subjective](https://github.com/muhuaH-TK/china-law-exam-subjective)。
 
-在WorkBuddy或Codex桌面聊天里完成首次设置、接收资料、完整出题、作答订正、自动保存和考前文档交付，当前版本 **0.3.0**。配套Windows/macOS本地运行核心，无需额外模型API，不附带作者教材、成绩、账号或旧自动任务。
+在WorkBuddy或Codex桌面聊天里完成首次设置、接收资料、完整出题、作答订正、自动保存和考前文档交付，当前版本 **0.3.1**。配套Windows/macOS本地运行核心，无需额外模型API，不附带作者教材、成绩、账号或旧自动任务。
 
 ## 开始使用
 
-从[Releases](https://github.com/muhuaH-TK/china-law-exam-subjective/releases)获取安装包：WorkBuddy导入`law-exam-study-0.3.0-skill.zip`；Codex使用`china-law-exam-subjective-0.3.0-codex-plugin.zip`中的本地插件市场。打开你选择的本地复习目录，点击“法考主观题复习”入口或在聊天说“开始复习”。见[安装与开始复习](docs/安装与开始复习.md)。
+从[Releases](https://github.com/muhuaH-TK/china-law-exam-subjective/releases)获取安装包：WorkBuddy导入`law-exam-study-0.3.1-skill.zip`；Codex使用`china-law-exam-subjective-0.3.1-codex-plugin.zip`中的本地插件市场。打开你选择的本地复习目录，点击“法考主观题复习”入口或在聊天说“开始复习”。见[安装与开始复习](docs/安装与开始复习.md)。
 
 AI在聊天中引导年度、选做、资料、课程进度和必要授权，并检查Python3.11以上环境。默认09:30自动学习、22:00监测，首次可修改；监测从第二阶段起。后续每日任务自动安排，每次真实交互后保存，无需每天说开始或暂停。WorkBuddy按定时任务的日期运行会话使用，所有聊天共享进度。
 
@@ -41,4 +41,4 @@ AI操作字段见[AI工作流](docs/AI工作流.md)，实际验收边界见[功�
 
 当前GitHub仓库为私有仓库；开源许可尚待作者确定，暂未授予开源使用许可。
 
-0.3.0改造桌面入口、项目绑定、原生自动任务和自包含安装包。0.2.1的订正历史兼容等修复继续保留，旧实例无需重置；首次告诉AI原实例目录即可绑定。旧修复说明见[WorkBuddy测试修复说明](docs/WorkBuddy测试修复说明.md)，当前验收见[桌面验收记录](docs/桌面验收记录.md)。
+0.3.1补充占位答复拦截、错题留痕作废、阶段错位确认、空实例换年处理、资料缺口和首次引导；[修改意见辨析](docs/20261019修改意见辨析.md)逐项说明采纳与保留原因。[本次验收](docs/0.3.1验收记录.md)与历史[桌面改造验收](docs/桌面验收记录.md)分别记录。0.3.0的桌面入口、项目绑定、原生任务和自包含安装包继续保留，旧实例无需重置；首次告诉AI原实例目录即可绑定。

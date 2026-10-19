@@ -103,7 +103,7 @@ def context(workspace, on=None):
     value = binding(workspace)
     if value is None:
         return {"status": "needs_project", "workspace": str(Path(workspace).expanduser().resolve()),
-                "next_action": "在聊天中确认本地复习目录，再bootstrap；不启动网页、不自动选择其他实例"}
+                "next_action": "请在聊天选择已有本地复习目录，或同意由AI在指定位置新建专用目录；确认后AI后台创建并bootstrap绑定，无需用户手动先建目录。已有实例先续用，不猜位置。"}
     service, _ = service_for(workspace)
     return session_context(service, on, value)
 
@@ -116,6 +116,7 @@ def session_context(service, on=None, project=None):
         profile = {k: profile[k] for k in ("schema_version", "instance_id", "revision", "lifecycle", "config")}
     return {"status": "ready", "project": project, "version": state["version"], "profile": profile,
             "plan": state["plan"], "setup_steps": state["setup_steps"], "next_action": state["next_action"],
+            "stage_alignment": state["stage_alignment"], "material_readiness": state["material_readiness"],
             "learning": service.learning_state() if allowed else None,
             "automation": automation_plan(service, state["plan"]["day"], project),
             "instruction": "在当前聊天直接学习；自动保存每次真实交互，未收到答复时停在待答，不要求每天说开始或暂停。"}
