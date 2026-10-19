@@ -1,0 +1,4 @@
+interface:
+  display_name: "学习｜法考主观题复习"
+  short_description: "在桌面聊天中自动安排复习、订正并保存进度"
+  default_prompt: "使用 $law-exam-study，在当前项目中开始法考主观题复习，先读取已有进度并通过聊天完成必要准备。"

@@ -22,7 +22,7 @@ def emit(value):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description="中国法律职业资格考试主观题复习：首次设置与学习记录")
-    parser.add_argument("command", nargs="?", default="serve", choices=("serve", "doctor", "status", "plan", "configure", "import", "record", "mcp", "client-config", "dates", "learn", "source-op", "capture", "monitor", "export", "schedule-enable", "schedule-files", "tick", "worker"))
+    parser.add_argument("command", nargs="?", default="start", choices=("start", "chat", "serve", "doctor", "status", "plan", "configure", "import", "record", "mcp", "client-config", "dates", "learn", "source-op", "capture", "monitor", "export", "schedule-enable", "schedule-files", "tick", "worker"))
     parser.add_argument("--data-dir", default=os.environ.get("LAW_STUDY_HOME", str(Path.home()/".law-exam-study"/"default")))
     parser.add_argument("--port", type=int, default=0)
     parser.add_argument("--no-browser", action="store_true")
@@ -32,11 +32,21 @@ def main(argv=None):
     parser.add_argument("--subject", default="综合")
     parser.add_argument("--category", default="other")
     parser.add_argument("--instruction", help="用户明确指令的真实依据；用于指定自动化设备")
+    parser.add_argument("--workspace", default=str(Path.cwd()), help="AI桌面的本地复习项目目录")
     args = parser.parse_args(argv)
     if args.command == "doctor":
         emit(capabilities())
         return 0
     try:
+        if args.command in ("start", "chat"):
+            from lawstudy.desktop import dispatch
+            payload = json.loads(Path(args.file).read_text(encoding="utf-8-sig")) if args.file else {"action": "context"}
+            value = dispatch(args.workspace, payload)
+            if args.command == "start":
+                value["desktop_entry"] = "在WorkBuddy或Codex安装法考主观题复习技能，打开本地复习目录，首次在聊天中说“开始复习”。后续由已确认的每日任务自动安排。"
+                value["installation_guide"] = str(Path(__file__).resolve().parent/"docs/安装与开始复习.md")
+            emit(value)
+            return 0
         if args.command == "serve":
             server = make_server(args.data_dir, args.port)
             url = f"http://127.0.0.1:{server.server_port}/"

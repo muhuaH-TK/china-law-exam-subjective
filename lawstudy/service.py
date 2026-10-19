@@ -122,7 +122,7 @@ class Service(LearningMixin, MonitorMixin):
         elif plan["stage"]["number"] == 4:
             next_action = "整理已导入材料和真实历史错漏，不要求开始做题。"
         else:
-            next_action = "在所选AI中连接本实例，核验资料里的完整原题和答案，再开始今日学习；也可在页面续答已发出的题。"
+            next_action = "在当前聊天先续接待答环节，再按阶段直接安排今日学习；AI核验完整原题和答案并自动保存真实进度。"
         # 不把完整原答或资料正文暴露在每日计划里。
         safe = {k: data[k] for k in ("schema_version", "instance_id", "revision", "lifecycle", "config", "materials", "course_units", "sources", "checkpoint")}
         safe["checkpoints"] = data.get("checkpoints", {})
@@ -214,6 +214,46 @@ class Service(LearningMixin, MonitorMixin):
             raise ValueError("请选择实际存在的单份资料文件，不能传入目录")
         with path.open("rb") as handle:
             return self.import_stream(path.name, handle, subject, category, version, origin)
+
+    def import_selected_path(self, path, subject, category, version, instruction):
+        """用户明确指定的附件、本地文件或目录；逐份保存，不扩展扫描范围。"""
+        from .learning import required
+        required(instruction, "用户提供资料或指定目录的实际依据", 5000)
+        selected = Path(path).expanduser().resolve()
+        if self.store.snapshot()[1] != version:
+            from .store import ConflictError
+            raise ConflictError("内容已变化，请重读再登记资料")
+        if selected.is_file():
+            result = self.import_file(selected, subject, category, version)
+            return {"saved": 0 if result["duplicate"] else 1, "duplicates": int(result["duplicate"]),
+                    "failed": [], "material_ids": [result["material"]["id"]]}
+        if not selected.is_dir() or selected == selected.parent:
+            raise ValueError("请选择存在的单份资料或专用资料目录，不扫描磁盘根目录")
+        report = {"saved": 0, "duplicates": 0, "failed": [], "material_ids": [], "skipped": []}
+        excluded = {".git", ".venv", "node_modules", "__pycache__", ".law-study", ".codex", ".workbuddy", ".codebuddy", ".agents"}
+        for folder, dirs, files in os.walk(selected, followlinks=False):
+            folder = Path(folder)
+            dirs[:] = sorted(d for d in dirs if d not in excluded and not (folder/d).is_symlink()
+                             and (folder/d).resolve().is_relative_to(selected)
+                             and not (folder/d).resolve().is_relative_to(self.store.directory))
+            if folder.resolve().is_relative_to(self.store.directory):
+                dirs[:] = []
+                continue
+            for name in sorted(files):
+                source = folder/name
+                if source.is_symlink() or not source.resolve().is_relative_to(selected):
+                    report["skipped"].append(str(source.relative_to(selected)))
+                    continue
+                try:
+                    current = self.store.snapshot()[1]
+                    result = self.import_file(source, subject, category, current)
+                    report["duplicates" if result["duplicate"] else "saved"] += 1
+                    report["material_ids"].append(result["material"]["id"])
+                except (ValueError, OSError) as exc:
+                    report["failed"].append({"file": str(source.relative_to(selected)), "error": str(exc)})
+        report["complete"] = not report["failed"]
+        report["instruction"] = "已逐份保存真实原件；导入不代表已学完或可出题。不读取未指定目录、账号配置或目录外符号链接。"
+        return report
 
     def import_stream(self, name, stream, subject, category, version, origin=None, length=None):
         """分块保存任意格式与大小的用户原件；没有整文件base64和内存复制。"""
@@ -433,4 +473,5 @@ def capabilities():
         "date_auto_search": "ready_http_or_client_tool_evidence", "question_selection_and_grading": "ready_ai_mediated",
         "scheduled_execution": "ready_requires_instance_activation", "source_monitoring": "ready_feed_or_client_browser",
         "mcp_stdio": "ready", "topic_export": "available" if find_spec("reportlab") and find_spec("pypdf") else "optional_dependency_missing",
+        "desktop_chat": "ready_skill_or_mcp", "native_client_automation": "requires_actual_client_task_receipt",
         "workbuddy_client": "not_tested", "codex_client": "not_tested", "macos": "not_tested"}

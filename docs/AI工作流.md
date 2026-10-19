@@ -1,6 +1,6 @@
 # AI共用执行说明
 
-本项目由本机程序保存状态，所选AI完成阅读、检索、语义讲评和资料组织。无需额外购买模型API。先读AGENTS.md，调用get_state；工具返回错误时按事实处理，不能靠改JSON绕过边界。
+本项目由本机程序保存状态，所选AI在桌面聊天完成阅读、检索、语义讲评和资料组织。无需额外购买模型API。先读桌面聊天工作流，通过技能后台guide/context或MCP的get_workflow/desktop_context读取规则和同一真实实例，不打开设置网页。工具返回错误按事实处理，不能靠改JSON绕过边界。
 
 ## 首次使用
 
@@ -8,7 +8,7 @@
 
 通过configure_instance保存明确选择，附user_instruction实际依据；不得因安装连接而自动允许在线AI。初始无资料时请用户主动提供文件、文件夹或链接；文件夹由用户明确选定后分份导入，不扫描其他目录。用户主动提供的单份文件不限制大小、格式或资料科目，不要求先拆分。原件分块保存；暂不支持解析或较大的文件仍保留，由所选AI按需读取，不能把已保存误称为完整解析。
 
-主动文件用import_selected_material，或使用本地页面。检索获取文件时先核对config.authorization范围；search_only先展示候选，用户选定后origin附import_authorization；search_and_import在已有范围内直接导入，不重复逐份询问。origin格式：
+用户在聊天提供附件或指定本地文件/目录后，AI通过技能后台import或MCP的import_selected_material自动登记，不要求另做导入操作。检索获取文件时先核对config.authorization范围；search_only先展示候选，用户选定后origin附import_authorization；search_and_import在已有范围内直接导入，不重复逐份询问。检索文件用支持origin的MCP或原导入入口登记，不能当作用户主动提供来绕过授权。origin格式：
 
 ```json
 {"kind":"authorized_search","url":"原始公开网址","evidence":"实际工具引用、范围符合性及保存依据","author":"实际作者","year_version":"已核实版本"}

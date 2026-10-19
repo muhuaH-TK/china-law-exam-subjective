@@ -1,0 +1,18 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "china-law-exam-subjective",
+  "version": "0.3.0",
+  "description": "中国法律职业资格考试主观题复习：在桌面聊天中引导设置、自动安排学习、订正保存与题源监测",
+  "author": {"name": "muhuaH-TK"},
+  "repository": "https://github.com/muhuaH-TK/china-law-exam-subjective",
+  "extensions": {
+    "com.openai": {
+      "onboardingSkill": "./skills/law-exam-study/SKILL.md",
+      "interface": {
+        "displayName": "中国法律职业资格考试主观题复习",
+        "shortDescription": "每日在项目聊天中复习，自动保存真实进度",
+        "defaultPrompt": ["开始复习", "继续今天的复习"]
+      }
+    }
+  }
+}
