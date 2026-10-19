@@ -2,13 +2,13 @@
 
 面向中国法律职业资格考试主观题的四阶段复习项目。GitHub仓库：[china-law-exam-subjective](https://github.com/muhuaH-TK/china-law-exam-subjective)。
 
-在WorkBuddy或Codex桌面聊天里完成首次设置、接收资料、完整出题、作答订正、自动保存和考前文档交付，当前版本 **0.3.1**。配套Windows/macOS本地运行核心，无需额外模型API，不附带作者教材、成绩、账号或旧自动任务。
+在WorkBuddy或Codex桌面聊天里完成首次设置、接收资料、完整出题、作答订正、自动保存和考前文档交付，当前版本 **0.4.0**。配套Windows/macOS本地运行核心，无需额外模型API，不附带作者教材、成绩、账号或旧自动任务。
 
 ## 开始使用
 
-从[Releases](https://github.com/muhuaH-TK/china-law-exam-subjective/releases)获取安装包：WorkBuddy导入`law-exam-study-0.3.1-skill.zip`；Codex使用`china-law-exam-subjective-0.3.1-codex-plugin.zip`中的本地插件市场。打开你选择的本地复习目录，点击“法考主观题复习”入口或在聊天说“开始复习”。见[安装与开始复习](docs/安装与开始复习.md)。
+从[Releases](https://github.com/muhuaH-TK/china-law-exam-subjective/releases)获取安装包：WorkBuddy导入`law-exam-study-0.4.0-skill.zip`；Codex使用`china-law-exam-subjective-0.4.0-codex-plugin.zip`中的本地插件市场。首次优先引导创建桌面项目（可选择跳过或在受阻时继续），再绑定本地复习目录，点击“法考主观题复习”入口或在聊天说“开始复习”。见[安装与开始复习](docs/安装与开始复习.md)。
 
-AI在聊天中引导年度、选做、资料、课程进度和必要授权，并检查Python3.11以上环境。默认09:30自动学习、22:00监测，首次可修改；监测从第二阶段起。后续每日任务自动安排，每次真实交互后保存，无需每天说开始或暂停。WorkBuddy按定时任务的日期运行会话使用，所有聊天共享进度。
+首次先明确安装准备、独立测试或正式模式；正式开始只需确认一次。AI在聊天中引导年度、选做、资料、课程进度和必要授权，并检查Python3.11以上环境。默认09:30自动学习、22:00监测，首次可修改；监测从第二阶段起。后续每日任务自动安排，每次真实交互后保存，无需每天说开始或暂停。每日任务使用固定名称，每天新建当地日期YYYY-MM-DD命名的学习聊天；WorkBuddy日期运行会话同样核验。所有聊天共享进度。
 
 资料可直接发在聊天中，也可指定本地文件或资料目录，AI自动整理登记。项目绑定在复习目录的`.law-study/project.json`，学习资料与进度通常位于其`.law-study/data`；可绑定已有实例，源码目录内不保存正式实例。不默认上传云端项目资产库，私人目录不随代码发布。
 
@@ -35,10 +35,10 @@ AI在聊天中引导年度、选做、资料、课程进度和必要授权，并
 
 ## 检查与交付
 
-`python run.py doctor`检查功能与依赖，status查看指定实例。开发检查：`python -m unittest discover -s tests -v`与`node --check static/app.js`；源码打包：`python tools/package_release.py`。Node仅用于开发检查。源码包按白名单逐文件核验，不含实例。
+`python run.py doctor`仅检查代码与依赖能力，不证明客户端验收，status查看指定实例。开发检查：`python -m unittest discover -s tests -v`与`node --check static/app.js`；源码打包：`python tools/package_release.py`。Node仅用于开发检查。源码包按白名单逐文件核验，不含实例。
 
-AI操作字段见[AI工作流](docs/AI工作流.md)，实际验收边界见[功能状态](docs/功能状态.md)。单设备维护实例，迁移复制完整目录，停旧机任务并重生成新机连接。Windows/macOS CI已配置，未运行的CI和真实客户端验收不能写通过。
+AI操作字段见[AI工作流](docs/AI工作流.md)，实际验收边界见[功能状态](docs/功能状态.md)。单设备维护实例；受控迁移先停任务、核验备份，再复制绑定及同步任务，保留源目录和恢复入口。Windows/macOS CI已配置，未运行的CI和真实客户端验收不能写通过。
 
 当前GitHub仓库为私有仓库；开源许可尚待作者确定，暂未授予开源使用许可。
 
-0.3.1补充占位答复拦截、错题留痕作废、阶段错位确认、空实例换年处理、资料缺口和首次引导；[修改意见辨析](docs/20261019修改意见辨析.md)逐项说明采纳与保留原因。[本次验收](docs/0.3.1验收记录.md)与历史[桌面改造验收](docs/桌面验收记录.md)分别记录。0.3.0的桌面入口、项目绑定、原生任务和自包含安装包继续保留，旧实例无需重置；首次告诉AI原实例目录即可绑定。
+0.4.0增加准备/测试/正式模式、可跳过的首次桌面项目选择、任务查询/恢复/防重复和真实规格回读、日期聊天关联、分项验收及受控迁移。详见[本次验收](docs/0.4.0验收记录.md)和[安装运行与恢复](docs/安装运行与恢复.md)。旧学习记录保留，既有0.3.1修复继续有效；历史报告保留当时事实，不覆盖为新版本结果。

@@ -1,3 +1,5 @@
+from support import confirm_formal
+from lawstudy.service import Service
 from http.client import HTTPConnection
 import json
 import re
@@ -16,6 +18,7 @@ class WebTests(unittest.TestCase):
         temporary_root.mkdir(exist_ok=True)
         self.tmp=tempfile.TemporaryDirectory(dir=temporary_root)
         assert Path(self.tmp.name).resolve().is_relative_to(temporary_root.resolve())
+        confirm_formal(Service(Path(self.tmp.name)/"web"))
         self.server=make_server(Path(self.tmp.name)/"web",0)
         self.thread=threading.Thread(target=self.server.serve_forever,daemon=True)
         self.thread.start()

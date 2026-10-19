@@ -1,3 +1,4 @@
+from support import confirm_formal
 """WorkBuddy报告回归；仅使用合成资料和隔离实例，不读取真实学习数据。"""
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
@@ -28,6 +29,7 @@ class ReportRegressions(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory(dir=folder)
         self.addCleanup(self.temp.cleanup)
         self.service = Service(Path(self.temp.name)/"instance")
+        confirm_formal(self.service)
         self.configure({"year": 2027, "participation": "participating", "stage_override": 2,
                         "elective": "administrative", "authorization": {"search_mode": "search_and_import", "scope": "合成来源", "online_ai": True}})
 

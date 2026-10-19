@@ -1,3 +1,5 @@
+from support import confirm_formal
+from lawstudy.native_tasks import SPEC_KEYS
 """桌面聊天后端和安装包验收。所有用户、宿主回执与资料均为合成隔离样本。"""
 import base64
 from contextlib import redirect_stdout
@@ -32,7 +34,10 @@ class DesktopTests(unittest.TestCase):
         self.workspace = Path(self.temp.name)/"复习项目"
 
     def start(self, client="workbuddy"):
-        return bootstrap(self.workspace, client, "合成用户选定本工作空间并开始复习")
+        bootstrap(self.workspace, client, "合成用户选定本工作空间")
+        service, _ = service_for(self.workspace)
+        confirm_formal(service)
+        return context(self.workspace)
 
     def call(self, action, **kwargs):
         request = {"action": action, **kwargs}
@@ -53,9 +58,19 @@ class DesktopTests(unittest.TestCase):
     def claim(self):
         return self.call("automation", operation="claim", payload={"evidence": "合成用户指定本客户端及本机运行自动化"})
 
-    def receipt(self, role="learning", status="created", task_id="synthetic-native-task"):
+    def receipt(self, role="learning", status="verified", task_id="synthetic-native-task"):
+        spec = next(r for r in self.call("automation_plan")["tasks"] if r["role"] == role)
+        service, _ = service_for(self.workspace)
+        old = service.store.snapshot()[0].get("desktop", {}).get("tasks", {}).get(role)
+        creation_id = spec.get("creation_id")
+        if not old and not creation_id:
+            query = self.call("automation", operation="reconcile", payload={"role": role, "complete": True, "candidates": [],
+                "tool": "synthetic_host.list", "evidence": "合成实际完整查询，无匹配"})["result"]
+            creation_id = self.call("automation", operation="reserve_create", payload={"role": role, "discovery_id": query["id"],
+                "tool": "synthetic_host.list", "evidence": "合成创建意图"})["result"]["creation_id"]
+        observed = {"task_id": task_id, "enabled": status != "disabled", "spec": {k: spec[k] for k in SPEC_KEYS}}
         return self.call("automation", operation="record_task", payload={"role": role, "status": status, "task_id": task_id,
-                         "tool": "synthetic_host.create_task", "evidence": "合成测试宿主回执，不是任何真实客户端任务"})
+            "creation_id": creation_id, "observed": observed, "tool": "synthetic_host.read_task", "evidence": "合成真实规格回读，不是实际客户端"})
 
     def test_default_entry_never_opens_browser_or_creates_a_personal_instance(self):
         self.workspace.mkdir()
@@ -164,7 +179,7 @@ class DesktopTests(unittest.TestCase):
         self.start()
         self.settings(stage=1, automation=True)
         plan = self.call("automation_plan")
-        self.assertEqual([r["action"] for r in plan["tasks"]], ["create", "wait"])
+        self.assertEqual([r["action"] for r in plan["tasks"]], ["discover", "wait"])
         self.assertFalse(plan["native_installed"])
         self.assertEqual(self.call("monitor")["result"]["status"], "waiting_stage2")
         with self.assertRaises(ValueError):
@@ -176,7 +191,7 @@ class DesktopTests(unittest.TestCase):
         plan = self.call("automation_plan")
         self.assertEqual([r["action"] for r in plan["tasks"]], ["keep", "wait"])
         self.settings(stage=2, automation=True)
-        self.assertEqual(self.call("automation_plan")["tasks"][1]["action"], "create")
+        self.assertEqual(self.call("automation_plan")["tasks"][1]["action"], "reserve_create")
         with self.assertRaises(ValueError):
             self.receipt("monitor")
         self.receipt("monitor", task_id="synthetic-monitor-task")
@@ -190,11 +205,11 @@ class DesktopTests(unittest.TestCase):
         auto = deepcopy(context(self.workspace)["profile"]["config"]["automation"])
         auto["learning_time"] = "10:15"
         self.call("configure", payload={"automation": auto})
-        self.assertEqual(self.call("automation_plan")["tasks"][0]["action"], "update")
+        self.assertEqual(self.call("automation_plan")["tasks"][0]["action"], "discover")
         with self.assertRaises(ValueError):
             self.receipt(task_id="duplicate-task")
         self.receipt(status="failed")
-        self.assertEqual(self.call("automation_plan")["tasks"][0]["action"], "update")
+        self.assertEqual(self.call("automation_plan")["tasks"][0]["action"], "discover")
         self.receipt(status="verified")
         self.assertEqual(self.call("automation_plan")["tasks"][0]["action"], "keep")
 
@@ -234,7 +249,7 @@ class DesktopTests(unittest.TestCase):
             {"jsonrpc": "2.0", "id": 2, "method": "resources/read", "params": {"uri": "lawstudy://guide/desktop"}},
             {"jsonrpc": "2.0", "id": 3, "method": "prompts/list"},
             {"jsonrpc": "2.0", "id": 4, "method": "prompts/get", "params": {"name": "daily-study"}}])
-        self.assertEqual(len(rows[1]["result"]["resources"]), 4)
+        self.assertEqual(len(rows[1]["result"]["resources"]), 5)
         self.assertEqual(rows[2]["result"]["contents"][0]["text"], guide()["content"])
         self.assertEqual(len(rows[3]["result"]["prompts"]), 3)
         self.assertTrue(rows[4]["result"]["messages"])

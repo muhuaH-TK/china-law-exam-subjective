@@ -126,6 +126,7 @@ def theme_group(themes, target=1000):
 
 
 def daily_plan(data, day):
+    from .experience import study_allowed
     config = data["config"]
     result = stage(config, day)
     number = result["number"]
@@ -133,6 +134,9 @@ def daily_plan(data, day):
     # 暂停优先，不因未达到题量继续安排。
     if data["lifecycle"] in ("paused", "ended"):
         result = {"number": number, "status": data["lifecycle"], "reason": "用户已暂停或结束学习"}
+        number = None
+    elif not study_allowed(data):
+        result = {"number": number, "status": "setup", "reason": "安装准备/模式待确认或正在迁移，不自动安排正式教学"}
         number = None
     records = data["exercises"]
     completed = [r for r in records if r.get("completed_on") == day and r["subject"] in active]

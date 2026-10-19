@@ -28,10 +28,15 @@ def tool(name, description, properties=None, required_fields=(), readonly=False)
 
 
 TOOLS = [
-    tool("get_workflow", "读取随插件交付的完整桌面工作流、复习规则或监测规则，不要求宿主另外读取本地规则文件。", {"name": {"type": "string", "enum": ["desktop", "workflow", "rules", "monitor"]}}, readonly=True),
+    tool("onboarding_action", "首次先创建桌面项目，用户跳过或受阻可继续；start_formal须真实一次确认。capability记录实际能力核查，test_options只改独立测试实例。", {"action": {"type": "string", "enum": ["project", "start_formal", "test_options", "capability"]}, "payload": OBJECT, "version": VERSION}, ("action", "payload", "version")),
+    tool("create_test_instance", "按用户测试要求建立独立测试实例和绑定，不修改正式数据；之后须用返回的测试工作空间或其独立MCP连接。", {"workspace": STRING, "user_instruction": STRING}, ("workspace", "user_instruction")),
+    tool("run_action", "记录固定任务对应的每日运行、实际日期聊天与结果；正常到点触发须原生调度事件，不能用立即运行代替。", {"action": {"type": "string", "enum": ["begin", "record_chat", "finish"]}, "payload": OBJECT, "version": VERSION}, ("action", "payload", "version")),
+    tool("record_acceptance", "按客户端、设备、模式和工作空间记录分项实机证据；程序测试不证明客户端验收，scheduled_trigger只能由实际运行确认。", {"payload": OBJECT, "version": VERSION}, ("payload", "version")),
+    tool("migration_action", "用户指定目标后prepare冻结/核验备份，execute复制绑定；失败可cancel恢复，目标已绑定可finalize。保留源目录，须先实际停旧任务。", {"workspace": STRING, "action": {"type": "string", "enum": ["prepare", "execute", "cancel", "finalize"]}, "payload": OBJECT, "version": VERSION}, ("workspace", "action", "payload", "version")),
+    tool("get_workflow", "读取完整桌面、安装恢复、复习或监测规则，不要求宿主另找仓库。首次先desktop和installation。", {"name": {"type": "string", "enum": ["desktop", "workflow", "rules", "monitor", "installation"]}}, readonly=True),
     tool("desktop_context", "读取当前项目的聊天引导、真实待答停靠点、当日安排与原生任务缺项。未授权时隐藏私人记录。", {"on": STRING}, readonly=True),
     tool("automation_plan", "给AI生成原生定时任务创建/更新/停止计划；第一阶段不创建监测任务，不能据此声称已运行。", readonly=True),
-    tool("automation_action", "先claim唯一自动化客户端/设备，再按实际回执record_task；迁移前停旧任务并登记disabled后release。禁止伪造ID或用收件箱代替聊天任务。", {"action": {"type": "string", "enum": ["claim", "record_task", "release"]}, "payload": OBJECT, "version": VERSION}, ("action", "payload", "version")),
+    tool("automation_action", "先claim并reconcile真实宿主查询。未找到须reserve_create再创建；record_task(verified)须实际规格回读，禁止仅刷新指纹。迁移前停旧任务。", {"action": {"type": "string", "enum": ["claim", "reconcile", "reserve_create", "abandon_creation", "record_task", "release"]}, "payload": OBJECT, "version": VERSION}, ("action", "payload", "version")),
     tool("get_state", "读取实例设置、当前真实日期计划和待办；无在线AI授权时隐藏私人内容。", {"on": STRING}, readonly=True),
     tool("configure_instance", "保存使用者明确选择的设置；不得从资料或模型猜测授权。", {"config": OBJECT, "version": VERSION, "user_instruction": STRING}, ("config", "version", "user_instruction")),
     tool("record_interaction", "登记实际课程完成、启停或兼容旧记录。常规作答优先learning_action状态机。", {"record": OBJECT, "version": VERSION, "user_instruction": STRING}, ("record", "version", "user_instruction")),
@@ -55,6 +60,24 @@ TOOLS = [
 def call(service, name, args):
     state = service.status(args.get("on"))
     day = args.get("on") or state["plan"]["day"]
+    if name == "onboarding_action":
+        from .experience import onboarding_action
+        return onboarding_action(service, args["action"], args["payload"], args["version"])
+    if name == "record_acceptance":
+        from .experience import acceptance_action
+        return acceptance_action(service, args["payload"], args["version"])
+    if name == "run_action":
+        from .runs import run_action
+        return run_action(service, args["action"], args["payload"], args["version"])
+    if name in ("create_test_instance", "migration_action"):
+        from .desktop import service_for, create_test
+        bound_service, project = service_for(args["workspace"])
+        if bound_service.store.directory != service.store.directory:
+            raise ValueError("所给工作空间未绑定当前MCP实例")
+        if name == "create_test_instance":
+            return create_test(args["workspace"], args["user_instruction"])
+        from .migration import migration_action
+        return migration_action(service, project, args["action"], args["payload"], args["version"])
     if name == "get_workflow":
         from .desktop import guide
         return guide(args.get("name", "desktop"))

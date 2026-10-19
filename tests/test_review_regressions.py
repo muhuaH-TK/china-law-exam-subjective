@@ -1,3 +1,4 @@
+from support import confirm_formal
 """2026-10-19审查回归；只使用隔离实例、合成题面和合成公告。"""
 from pathlib import Path
 import tempfile
@@ -18,6 +19,7 @@ class ReviewRegressions(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory(dir=parent)
         self.addCleanup(self.temp.cleanup)
         self.service = Service(Path(self.temp.name)/"data")
+        confirm_formal(self.service)
         self.configure({"year": 2027, "participation": "participating", "stage_override": 2,
                         "authorization": {"online_ai": True, "search_mode": "search_and_import", "scope": "合成测试"}})
 

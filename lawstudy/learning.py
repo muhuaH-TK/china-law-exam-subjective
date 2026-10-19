@@ -35,6 +35,9 @@ def actual_answer(value):
 
 
 def active(data, day):
+    from .experience import study_allowed
+    if not study_allowed(data):
+        raise ValueError("当前是安装准备或待确认模式；先明确开始正式复习，功能测试请用独立测试实例")
     iso(day)
     plan = daily_plan(data, day)
     if data["lifecycle"] != "active" or plan["stage"]["status"] in ("paused", "ended", "finished"):
@@ -119,6 +122,10 @@ class LearningMixin:
             raise ValueError("操作内容须为对象")
         result = {}
         def mutate(data):
+            if action in ("issue", "submit_answer", "grade", "teach", "theory_start", "theory_test", "theory_feedback", "theory_evaluate"):
+                from .experience import study_allowed
+                if not study_allowed(data):
+                    raise ValueError("当前是安装准备、项目待选择或迁移中；不开始正式教学，测试请使用独立实例")
             questions = data.setdefault("questions", [])
             sessions = data.setdefault("sessions", [])
             if action in ("unit_skip", "unit_reopen"):

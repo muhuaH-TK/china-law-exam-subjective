@@ -1,3 +1,4 @@
+from support import confirm_formal
 from copy import deepcopy
 import io
 import json
@@ -18,6 +19,7 @@ class ServiceTests(unittest.TestCase):
         assert Path(self.tmp.name).resolve().is_relative_to(temporary_root.resolve())
         self.addCleanup(self.tmp.cleanup)
         self.service=Service(Path(self.tmp.name)/"个人实例")
+        confirm_formal(self.service)
         self.configure({"year":2027,"participation":"participating","elective":"administrative","stage_override":2})
 
     def version(self):

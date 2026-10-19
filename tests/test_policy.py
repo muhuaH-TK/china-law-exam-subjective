@@ -8,6 +8,8 @@ from lawstudy.store import blank_instance
 def prepared(number=None, elective="administrative"):
     data = blank_instance()
     data["lifecycle"] = "active"
+    data["config"]["usage_mode"] = "formal"
+    data["desktop"] = {"host_project": {"status": "skipped"}}
     data["config"].update(year=2027, participation="participating", elective=elective, stage_override=number)
     for key, day in {"objective_end":"2027-09-12", "results":"2027-09-18", "subjective":"2027-10-17"}.items():
         data["config"]["exam_dates"][key].update(date=day, status="verified")

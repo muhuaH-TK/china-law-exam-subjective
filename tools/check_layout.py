@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 from lawstudy.documents import export_topic
 from lawstudy.service import Service
+from lawstudy.experience import onboarding_action
 
 
 def main():
@@ -20,6 +21,8 @@ def main():
         def version():
             return service.store.snapshot()[1]
         service.configure({"year": 2027, "participation": "participating", "stage_override": 2}, version())
+        onboarding_action(service, "project", {"status": "skipped", "user_instruction": "排版合成验证，明确不创建真实项目"}, version())
+        onboarding_action(service, "start_formal", {"user_instruction": "仅在本临时合成实例验证文档数据路径，不是真实用户学习"}, version())
         material = service.import_material("合成排版样例.md", "仅为排版合成数据，不含真实法律答案。".encode(), "刑法", "questions", version())["material"]["id"]
         q = service.learning("register_question", {"identity": "synthetic-layout/1", "facts": "合成案情：甲乙间发生一项用于验证排版的具体事件。"*28,
             "questions": ["合成设问一：列明成立条件及其分支。", "合成设问二：对应事实说明例外与后果。"], "subject": "刑法",

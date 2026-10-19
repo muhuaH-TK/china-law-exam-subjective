@@ -62,6 +62,7 @@ def tick(service, now=None):
         _, version = service.store.snapshot()
         notifications = []
         def mutate(d):
+            from .experience import study_allowed
             jobs = d.setdefault("job_days", {}).setdefault(day, {})
             if monitor_report is not None:
                 jobs["monitor"] = {"at": utc_now(), "report": monitor_report}
@@ -74,7 +75,7 @@ def tick(service, now=None):
                     d.setdefault("inbox", []).append(notification)
                     notifications.append(notification)
             if config["learning_requested"] and clock >= config["learning_time"] and "learning" not in jobs:
-                if data["lifecycle"] == "active" and plan["stage"]["number"] in (1, 2, 3, 4) and plan["stage"]["status"] not in ("paused", "ended", "finished"):
+                if study_allowed(data) and data["lifecycle"] == "active" and plan["stage"]["number"] in (1, 2, 3, 4) and plan["stage"]["status"] not in ("paused", "ended", "finished"):
                     notice = {"id": "learning:"+day, "kind": "learning", "on": day, "status": "pending",
                               "text": "今日复习入口已准备。请在所选AI打开同一实例，先续接，再按今日阶段安排；第四阶段阅读，不要求做题。"}
                     d.setdefault("inbox", []).append(notice)

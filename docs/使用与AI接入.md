@@ -38,3 +38,5 @@ instance.previous.json只是上一版，不是完整长期备份。重要阶段�
 ## 一手文档
 
 [WorkBuddy连接器](https://open.workbuddy.cn/docs/connector)、[Codex MCP](https://learn.chatgpt.com/docs/extend/mcp)、[MCP传输](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports)与[生命周期](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle)。
+
+0.4.0优先遵循安装运行与恢复.md：首次项目可跳过，先分清setup/test/formal；已有任务先对账、回读真实规格，每日日期聊天及到点验收分别登记。配置/MCP生成只表示准备，不表示已在客户端加载。

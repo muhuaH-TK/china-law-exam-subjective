@@ -23,6 +23,7 @@ def blank_instance():
     return {"schema_version": 1, "instance_id": str(uuid4()), "revision": 0,
         "created_at": utc_now(), "updated_at": utc_now(), "lifecycle": "setup",
         "config": {"year": None, "elective": "undecided", "participation": "undecided",
+            "usage_mode": "setup",
             "selected_ai": "workbuddy", "timezone": "Asia/Hong_Kong", "stage_override": None,
             "questions_per_unit": 1, "theory_target_chars": 1000,
             "exam_dates": {k: {"date": None, "status": "pending", "source_url": "", "evidence": ""}
@@ -84,13 +85,16 @@ class Store:
     def _write(self, data):
         atomic_bytes(self.path, (json.dumps(data, ensure_ascii=False, indent=2)+"\n").encode("utf-8"))
 
-    def update(self, expected_version, action):
+    def update(self, expected_version, action, *, allow_migration=False):
         if not expected_version:
             raise ConflictError("保存须带上读取时的版本")
         with self.lock():
             data, version = self.snapshot()
             if version != expected_version:
                 raise ConflictError("内容已变化，请重新读取并合并后保存")
+            from .experience import migration_blocked
+            if migration_blocked(data) and not allow_migration:
+                raise ConflictError("实例正在迁移或已迁出；先按迁移记录续接或恢复，不继续写旧实例")
             changed = deepcopy(data)
             result = action(changed)
             changed["revision"] += 1

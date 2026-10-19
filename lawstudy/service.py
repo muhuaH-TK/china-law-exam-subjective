@@ -119,7 +119,11 @@ def material_readiness(data, plan):
         messages.append("当前阶段可用原题不足：补充完整题面与同题答案；已存PDF/照片先核验登记。第一阶段可核验教材无原题后跳过，需自拟必须由用户明确要求。")
     if n in (2, 3, 4) and not themes:
         messages.append("理论材料已保存但尚未核验完整主题，请先整理主题。" if theory_materials else "请提供理论背诵材料或按已授权范围检索；缺理论不阻断案例。")
+    exempt_for_test = data["config"].get("usage_mode") == "test" and data.get("test_options", {}).get("skip_materials", True)
+    if exempt_for_test:
+        messages = ["独立测试可暂不提供教材，使用明确的合成资料；实际题库数量仍如实保留，不计正式学习。"]
     return {"unused_verified_originals": len(pool), "available_slots": eligible_count, "remaining_new_slots": target,
+            "exempt_for_test": exempt_for_test,
             "case_shortfall": max(0, target-eligible_count), "theory_materials": theory_materials,
             "verified_themes": len(themes), "messages": messages}
 
@@ -129,6 +133,7 @@ class Service(LearningMixin, MonitorMixin):
         self.store = Store(directory)
 
     def status(self, day=None):
+        from .experience import experience_state, usage_mode, project_choice, migration_blocked
         data, version = self.store.snapshot()
         day = day or today_in(data["config"]["timezone"])
         plan = daily_plan(data, day)
@@ -143,7 +148,8 @@ class Service(LearningMixin, MonitorMixin):
         steps = [
             {"name": "年度与备考状态", "ready": bool(config["year"]) and config["participation"] != "undecided"},
             {"name": "选做方向", "ready": True, "detail": "未确定时保留六科轮换" if config["elective"] == "undecided" else "已明确"},
-            {"name": "学习资料", "ready": bool(data["materials"])},
+            {"name": "学习资料", "ready": bool(data["materials"]) or (usage_mode(data) == "test" and data.get("test_options", {}).get("skip_materials", True)),
+             "detail": "测试模式可暂免教材，正式规则不改变" if usage_mode(data) == "test" and data.get("test_options", {}).get("skip_materials", True) else "按实际资料登记"},
             {"name": "在线AI与检索范围", "ready": any(e["kind"] == "settings" and "authorization" in e.get("fields", []) for e in data["events"]),
              "detail": "未允许在线AI时仍可本地整理，不外发资料"},
             {"name": "阶段确认", "ready": plan["stage"]["number"] is not None},
@@ -162,11 +168,20 @@ class Service(LearningMixin, MonitorMixin):
             next_action = "整理已导入材料和真实历史错漏，不要求开始做题。"
         else:
             next_action = "在当前聊天先续接待答环节，再按阶段直接安排今日学习；AI核验完整原题和答案并自动保存真实进度。"
+        if migration_blocked(data):
+            next_action = "实例迁移尚未完成；读取迁移记录继续或恢复，暂停自动教学和旧目录写入。"
+        elif project_choice(data)["status"] == "pending":
+            next_action = "首次优先创建专用桌面项目；用户不创建或实际创建受阻可登记跳过，再继续聊天设置。本地目录不代表桌面项目已创建。"
+        elif usage_mode(data) == "setup":
+            next_action = "当前仅安装准备；可整理设置与资料，测试请创建独立测试实例；正式复习须用户明确确认一次。"
+        elif usage_mode(data) == "test" and not data["materials"] and data.get("test_options", {}).get("skip_materials", True):
+            next_action = "当前为独立功能测试，允许暂不提供教材；使用明确标识的合成资料验证，测试进度不写回正式实例。"
         # 不把完整原答或资料正文暴露在每日计划里。
         safe = {k: data[k] for k in ("schema_version", "instance_id", "revision", "lifecycle", "config", "materials", "course_units", "sources", "checkpoint")}
         safe["checkpoints"] = data.get("checkpoints", {})
         return {"version": version, "profile": safe, "plan": plan, "setup_steps": steps,
                 "stage_alignment": alignment, "material_readiness": material_readiness(data, plan),
+                "experience": experience_state(data),
                 "next_action": next_action, "capabilities": capabilities()}
 
     def configure(self, payload, version):
@@ -259,7 +274,8 @@ class Service(LearningMixin, MonitorMixin):
             if "stage_override" in payload:
                 data.setdefault("stage_selection_history", []).append({"at": utc_now(), "selected": config["stage_override"],
                     "calendar": alignment["calendar"], "confirmation": payload.get("stage_confirmation")})
-            if data["lifecycle"] == "setup" and config["year"]:
+            from .experience import usage_mode
+            if data["lifecycle"] == "setup" and config["year"] and usage_mode(data) in ("formal", "test"):
                 data["lifecycle"] = "active"
             data["events"].append({"kind": "settings", "at": utc_now(), "fields": sorted(payload)})
         self.store.update(version, action)
@@ -435,6 +451,9 @@ class Service(LearningMixin, MonitorMixin):
                 data["course_units"].append({"id": str(uuid4()), "title": title,
                     "subject": payload["subject"], "completed_on": payload["completed_on"], "evidence": payload["evidence"]})
             elif kind == "answer":
+                from .experience import study_allowed
+                if not study_allowed(data):
+                    raise ValueError("准备阶段不保存正式作答；先确认正式复习或使用独立测试实例")
                 if data["lifecycle"] != "active":
                     raise ValueError("学习尚未开始、已暂停或已结束，不能自动记录新作答")
                 subject = payload.get("subject")
@@ -475,6 +494,9 @@ class Service(LearningMixin, MonitorMixin):
                     row["completed_on"] = payload["on"]
                 data["checkpoint"] = {"kind": "answer", "item_id": row["id"], "on": payload["on"]}
             elif kind == "error":
+                from .experience import study_allowed
+                if not study_allowed(data):
+                    raise ValueError("准备阶段不创建正式错题卡")
                 question_id = text(payload.get("question_id"), "关联原题", 500)
                 row = next((r for r in data["exercises"] if r["question_id"] == question_id), None)
                 if row is None:
@@ -502,6 +524,9 @@ class Service(LearningMixin, MonitorMixin):
                     "subject": row["subject"], "first_error_on": first_error_on,
                     "detail": detail, "status": "waiting", "reviews": []})
             elif kind == "review":
+                from .experience import study_allowed
+                if not study_allowed(data):
+                    raise ValueError("准备或迁移阶段不记录正式回顾")
                 day = payload["on"]
                 iso(day)
                 plan = daily_plan(data, day)
@@ -534,7 +559,9 @@ class Service(LearningMixin, MonitorMixin):
 
 
 def capabilities():
-    return {"python": platform.python_version(), "os": platform.system(),
+    from . import __version__
+    return {"version": __version__, "python": platform.python_version(), "os": platform.system(),
+        "diagnostic_scope": "code_and_dependencies_only_not_client_acceptance",
         "setup": "ready", "local_material_import": "ready",
         "stage_and_quota_rules": "ready", "json_recording": "ready",
         "theme_grouping": "ready", "error_rotation": "ready",

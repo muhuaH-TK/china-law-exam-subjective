@@ -1,3 +1,4 @@
+from support import confirm_formal
 """跨模块行为测试；所有题干和公告均为明确的合成测试数据。"""
 
 from copy import deepcopy
@@ -25,6 +26,7 @@ class WorkflowTests(unittest.TestCase):
         TMP.mkdir(exist_ok=True)
         self.temp = tempfile.TemporaryDirectory(dir=TMP)
         self.service = Service(self.temp.name)
+        confirm_formal(self.service)
         self.configure({"year": 2027, "participation": "participating", "stage_override": 2,
                         "authorization": {"search_mode": "search_and_import", "scope": "合成测试题源", "online_ai": True}})
         self.material = self.service.import_material("合成测试.md", "合成测试：甲与乙的具体事件及原设问。".encode(), "刑法", "questions", self.version())["material"]["id"]

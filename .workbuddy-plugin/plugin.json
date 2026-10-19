@@ -1,6 +1,6 @@
 {
   "name": "china-law-exam-subjective",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "中国法律职业资格考试主观题复习：聊天内设置、资料整理、每日自动学习与订正保存",
   "author": {"name": "muhuaH-TK"},
   "skills": "./skills/"

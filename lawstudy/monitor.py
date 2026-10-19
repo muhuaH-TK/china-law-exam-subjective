@@ -23,12 +23,23 @@ def monitor_gate(config, day):
     """阶段限制适用于手动、定时及浏览器回填；配置本身可以提前保存。"""
     iso(day)
     current = stage(config, day)
+    if config.get("usage_mode", "setup") != "formal":
+        return {"eligible": False, "status": "waiting_mode", "stage": current["number"],
+                "reason": "安装准备或测试实例不开展真实题源监测；先回正式实例确认复习模式"}
     eligible = current["number"] in (2, 3, 4)
     if not config.get("stage_override") and config["participation"] == "participating":
         end = config["exam_dates"].get("objective_end", {})
         eligible = eligible or (end.get("status") == "verified" and bool(end.get("date")) and day > end["date"])
     return {"eligible": bool(eligible), "status": "eligible" if eligible else "waiting_stage2",
             "stage": current["number"], "reason": "从第二阶段开始，按已授权来源和预算监测" if eligible else "题源监测从第二阶段开始；第一阶段或阶段未确认时只保存配置，不抓取、不补处理欠项"}
+
+
+def execution_gate(data, day):
+    from .experience import study_allowed
+    if not study_allowed(data):
+        return {"eligible": False, "status": "waiting_mode", "stage": None,
+                "reason": "准备、测试项目未选择或迁移中，不开展真实监测"}
+    return monitor_gate(data["config"], day)
 
 
 def parse_feed(body, content_type, base):
@@ -117,7 +128,7 @@ class MonitorMixin:
         evidence = required(payload.get("evidence"), "实际工具读取/响应核验依据", 10000)
         report = {"processed": [], "duplicates": 0, "deferred": 0}
         def mutate(data):
-            gate = monitor_gate(data["config"], day)
+            gate = execution_gate(data, day)
             if not gate["eligible"]:
                 raise ValueError(gate["reason"])
             source = find(data["sources"], payload.get("source_id"))
@@ -192,7 +203,7 @@ class MonitorMixin:
         safe_items = [{k: v for k, v in item.items() if k != "versions"} for item in items]
         return {"version": version, "sources": data["sources"], "budget": data.get("monitor_budget", {}).get(day, {"used": 0}),
                 "items": safe_items, "backlog_count": len(data.get("monitor_backlog", [])), "daily_limit": data["config"]["automation"]["daily_limit"],
-                "gate": monitor_gate(data["config"], day)}
+                "gate": execution_gate(data, day)}
 
     def read_capture(self, item_id):
         data, _ = self.store.snapshot()
@@ -207,7 +218,7 @@ class MonitorMixin:
         data, _ = self.store.snapshot()
         if not data["config"]["automation"]["monitor_requested"]:
             return {"status": "disabled", "sources": []}
-        gate = monitor_gate(data["config"], day)
+        gate = execution_gate(data, day)
         if not gate["eligible"]:
             return {"status": gate["status"], "reason": gate["reason"], "sources": []}
         enabled = [s for s in data["sources"] if s.get("requested") and s.get("authorization") and s["subject"] in subjects(data["config"]["elective"])]
