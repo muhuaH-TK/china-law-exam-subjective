@@ -39,7 +39,8 @@ class WorkflowTests(unittest.TestCase):
         return self.service.store.snapshot()[1]
 
     def configure(self, payload):
-        self.service.configure(payload, self.version())
+        self.service.configure(payload, self.version(), user_instruction="合成用户配置依据")
+        confirm_formal(self.service)
 
     def learn(self, action, payload):
         return self.service.learning(action, payload, self.version())

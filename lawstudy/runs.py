@@ -2,7 +2,7 @@
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
-from .experience import usage_mode, project_choice
+from .experience import usage_mode, project_choice, study_allowed
 from .learning import required, find
 from .policy import iso
 from .store import utc_now
@@ -32,6 +32,8 @@ def run_action(service, action, payload, version):
             raise ValueError("安装准备不开始正式运行；先确认正式复习或创建独立测试实例")
         runs = data.setdefault("desktop_runs", [])
         if action == "begin":
+            if not study_allowed(data):
+                raise ValueError('严格引导与完整设置摘要尚未由用户确认，不开始教学或测试运行')
             day, role, trigger = payload.get("on"), payload.get("role", "learning"), payload.get("trigger", "chat")
             iso(day)
             if role not in ("learning", "monitor") or trigger not in ("chat", "manual", "scheduled"):

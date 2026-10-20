@@ -43,7 +43,12 @@ class DesktopTests(unittest.TestCase):
         request = {"action": action, **kwargs}
         if action not in ("context", "guide", "bootstrap", "automation_plan"):
             request.setdefault("version", context(self.workspace)["version"])
-        return dispatch(self.workspace, request)
+        if action == 'configure':request.setdefault('user_instruction', '合成用户明确配置')
+        result = dispatch(self.workspace, request)
+        if action == 'configure':
+            confirm_formal(service_for(self.workspace)[0])
+            result['context'] = context(self.workspace)
+        return result
 
     def settings(self, stage=2, client="workbuddy", automation=False):
         config = {"year": 2027, "participation": "participating", "stage_override": stage, "selected_ai": client,
@@ -249,7 +254,7 @@ class DesktopTests(unittest.TestCase):
             {"jsonrpc": "2.0", "id": 2, "method": "resources/read", "params": {"uri": "lawstudy://guide/desktop"}},
             {"jsonrpc": "2.0", "id": 3, "method": "prompts/list"},
             {"jsonrpc": "2.0", "id": 4, "method": "prompts/get", "params": {"name": "daily-study"}}])
-        self.assertEqual(len(rows[1]["result"]["resources"]), 5)
+        self.assertIn("lawstudy://guide/project", {r["uri"] for r in rows[1]["result"]["resources"]})
         self.assertEqual(rows[2]["result"]["contents"][0]["text"], guide()["content"])
         self.assertEqual(len(rows[3]["result"]["prompts"]), 3)
         self.assertTrue(rows[4]["result"]["messages"])

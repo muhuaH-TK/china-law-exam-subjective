@@ -53,7 +53,7 @@ class WebTests(unittest.TestCase):
         headers={"X-App-Token":token,"Content-Type":"application/json"}
         _,raw,_=self.request("GET","/api/state",headers=headers)
         version=json.loads(raw)["version"]
-        body=json.dumps({"version":version,"config":{"year":2027,"participation":"participating","stage_override":3}})
+        body=json.dumps({"version":version,"user_instruction":"合成用户明确保存页面设置","config":{"year":2027,"participation":"participating","stage_override":3}})
         status,raw,_=self.request("POST","/api/config",body,headers)
         self.assertEqual(status,200)
         self.assertEqual(json.loads(raw)["state"]["plan"]["case_target"],5)

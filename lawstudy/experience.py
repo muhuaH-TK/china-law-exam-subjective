@@ -15,7 +15,8 @@ def usage_mode(data):
 
 
 def study_allowed(data):
-    return usage_mode(data) in ("formal", "test") and project_choice(data)["status"] != "pending" and not migration_blocked(data)
+    from .onboarding import setup_state
+    return usage_mode(data) in ("formal", "test") and project_choice(data)["status"] != "pending" and not migration_blocked(data) and setup_state(data)['confirmed']
 
 
 def migration_blocked(data):
@@ -44,7 +45,8 @@ def experience_state(data):
                and r.get("device_id") == device_id() and r.get("workspace") == workspace
                and r.get("software_version") == __version__]
     latest = {r["check"]: r for r in current}
-    return {"mode": mode, "instance_kind": data.get("instance_kind", "formal"), "host_project": choice,
+    from .onboarding import setup_state
+    return {"mode": mode, "instance_kind": data.get("instance_kind", "formal"), "host_project": choice, "onboarding": setup_state(data),
             "test_options": data.get("test_options", {}), "capability_checks": data.get("capability_checks", []),
             "migration": data.get("migration"),
             "checks": {key: latest.get(key, {"status": "pending"}) for key in CHECKS},
@@ -71,16 +73,24 @@ def onboarding_action(service, action, payload, version):
             desktop.setdefault("project_history", []).append(deepcopy(record))
             desktop["host_project"] = record
             result.update(record)
-        elif action == "start_formal":
-            if data.get("instance_kind", "formal") == "test":
+        elif action == "answer":
+            from .onboarding import record_choice
+            result.update(record_choice(data, payload))
+        elif action in ("start_formal", "start_test"):
+            if action == 'start_formal' and data.get("instance_kind", "formal") == "test":
                 raise ValueError("测试实例不能转为正式；回到原正式实例确认，不迁移测试作答或任务")
+            if action == 'start_test' and data.get('instance_kind') != 'test':
+                raise ValueError('仅独立测试实例可开始测试')
             if project_choice(data)["status"] == "pending":
                 raise ValueError("首次先创建桌面项目，或登记用户跳过/实际受阻；本地目录不等于桌面项目")
-            data["config"]["usage_mode"] = "formal"
-            data.setdefault("mode_history", []).append({"mode": "formal", "at": utc_now(), "user_instruction": instruction})
+            from .onboarding import confirm_setup
+            confirm_setup(data, payload)
+            mode = 'test' if action == 'start_test' else 'formal'
+            data["config"]["usage_mode"] = mode
+            data.setdefault("mode_history", []).append({"mode": mode, "at": utc_now(), "user_instruction": instruction})
             if data["lifecycle"] == "setup" and data["config"]["year"]:
                 data["lifecycle"] = "active"
-            result["mode"] = "formal"
+            result["mode"] = mode
         elif action == "test_options":
             if data.get("instance_kind") != "test":
                 raise ValueError("免教材和临时测试任务只适用于独立测试实例")

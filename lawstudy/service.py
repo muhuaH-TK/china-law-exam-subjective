@@ -119,7 +119,7 @@ def material_readiness(data, plan):
         messages.append("当前阶段可用原题不足：补充完整题面与同题答案；已存PDF/照片先核验登记。第一阶段可核验教材无原题后跳过，需自拟必须由用户明确要求。")
     if n in (2, 3, 4) and not themes:
         messages.append("理论材料已保存但尚未核验完整主题，请先整理主题。" if theory_materials else "请提供理论背诵材料或按已授权范围检索；缺理论不阻断案例。")
-    exempt_for_test = data["config"].get("usage_mode") == "test" and data.get("test_options", {}).get("skip_materials", True)
+    exempt_for_test = data["config"].get("usage_mode") == "test" and data.get("test_options", {}).get("skip_materials", False)
     if exempt_for_test:
         messages = ["独立测试可暂不提供教材，使用明确的合成资料；实际题库数量仍如实保留，不计正式学习。"]
     return {"unused_verified_originals": len(pool), "available_slots": eligible_count, "remaining_new_slots": target,
@@ -145,15 +145,9 @@ class Service(LearningMixin, MonitorMixin):
             and previous_selection.get("calendar") == alignment["calendar"])
         if alignment["confirmation_recorded"]:
             alignment["requires_confirmation"] = False
-        steps = [
-            {"name": "年度与备考状态", "ready": bool(config["year"]) and config["participation"] != "undecided"},
-            {"name": "选做方向", "ready": True, "detail": "未确定时保留六科轮换" if config["elective"] == "undecided" else "已明确"},
-            {"name": "学习资料", "ready": bool(data["materials"]) or (usage_mode(data) == "test" and data.get("test_options", {}).get("skip_materials", True)),
-             "detail": "测试模式可暂免教材，正式规则不改变" if usage_mode(data) == "test" and data.get("test_options", {}).get("skip_materials", True) else "按实际资料登记"},
-            {"name": "在线AI与检索范围", "ready": any(e["kind"] == "settings" and "authorization" in e.get("fields", []) for e in data["events"]),
-             "detail": "未允许在线AI时仍可本地整理，不外发资料"},
-            {"name": "阶段确认", "ready": plan["stage"]["number"] is not None},
-        ]
+        from .onboarding import setup_state
+        onboarding = setup_state(data)
+        steps = onboarding['steps']
         if data["lifecycle"] in ("paused", "ended"):
             next_action = "学习已暂停或结束，进度保留；等待你明确要求恢复。"
         elif not config["year"]:
@@ -174,7 +168,9 @@ class Service(LearningMixin, MonitorMixin):
             next_action = "首次优先创建专用桌面项目；用户不创建或实际创建受阻可登记跳过，再继续聊天设置。本地目录不代表桌面项目已创建。"
         elif usage_mode(data) == "setup":
             next_action = "当前仅安装准备；可整理设置与资料，测试请创建独立测试实例；正式复习须用户明确确认一次。"
-        elif usage_mode(data) == "test" and not data["materials"] and data.get("test_options", {}).get("skip_materials", True):
+        elif not onboarding['confirmed']:
+            next_action = '严格首次引导尚未确认完成；测试与正式相同。逐项询问真实选择，再展示完整设置摘要并确认，不擅填默认值。'
+        elif usage_mode(data) == "test" and not data["materials"] and data.get("test_options", {}).get("skip_materials", False):
             next_action = "当前为独立功能测试，允许暂不提供教材；使用明确标识的合成资料验证，测试进度不写回正式实例。"
         # 不把完整原答或资料正文暴露在每日计划里。
         safe = {k: data[k] for k in ("schema_version", "instance_id", "revision", "lifecycle", "config", "materials", "course_units", "sources", "checkpoint")}
@@ -184,7 +180,9 @@ class Service(LearningMixin, MonitorMixin):
                 "experience": experience_state(data),
                 "next_action": next_action, "capabilities": capabilities()}
 
-    def configure(self, payload, version):
+    def configure(self, payload, version, user_instruction=None):
+        from .learning import required
+        instruction = required(user_instruction, '用户设置原话依据', 10000)
         object_only(payload, "设置")
         allowed = {"year", "elective", "participation", "selected_ai", "timezone", "stage_override", "stage_confirmation", "questions_per_unit", "theory_target_chars", "exam_dates", "authorization", "automation"}
         if set(payload)-allowed:
@@ -277,7 +275,9 @@ class Service(LearningMixin, MonitorMixin):
             from .experience import usage_mode
             if data["lifecycle"] == "setup" and config["year"] and usage_mode(data) in ("formal", "test"):
                 data["lifecycle"] = "active"
-            data["events"].append({"kind": "settings", "at": utc_now(), "fields": sorted(payload)})
+            from copy import deepcopy
+            data.setdefault('settings_history', []).append({'at': utc_now(), 'values': deepcopy(payload), 'user_instruction': instruction})
+            data["events"].append({"kind": "settings", "at": utc_now(), "fields": sorted(payload), 'user_instruction': instruction})
         self.store.update(version, action)
 
     def import_material(self, name, raw, subject, category, version, origin=None):

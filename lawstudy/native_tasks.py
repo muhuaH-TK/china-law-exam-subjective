@@ -4,7 +4,7 @@ from hashlib import sha256
 import json
 from uuid import uuid4
 
-from .experience import usage_mode, project_choice, migration_blocked
+from .experience import usage_mode, project_choice, migration_blocked, study_allowed
 from .learning import required
 from .monitor import monitor_gate
 from .scheduler import device_id
@@ -44,7 +44,8 @@ def observed_task(value, expected, exact=False):
     if expected.get("host_project_id") is None:
         comparable["host_project_id"] = None  # 用户跳过专用项目时，不强制移出客户端已有分组。
     if exact and (any(k not in spec for k in SPEC_KEYS) or digest(comparable) != expected["fingerprint"]):
-        raise ValueError("宿主实际任务规格与当前设置不符；先真实更新并回读，不以重登记刷新指纹")
+        changed = [k for k in SPEC_KEYS if k not in comparable or comparable[k] != expected[k]]
+        raise ValueError("宿主实际任务规格与当前设置不符（差异字段：" + '、'.join(changed) + "）；先真实更新并回读，不以重登记刷新指纹")
     return {"task_id": value["task_id"], "enabled": value["enabled"], "spec": {k: spec[k] for k in SPEC_KEYS if k in spec}}
 
 
@@ -63,7 +64,7 @@ def automation_plan(service, on=None, project=None):
     rows = []
     for role in ("learning", "monitor"):
         requested = config["automation"][role+"_requested"] if mode == "formal" else (role == "learning" and options.get("native_requested", False)) if mode == "test" else False
-        eligible = bool(requested and workspace and host_project["status"] != "pending" and not migration_blocked(data))
+        eligible = bool(requested and workspace and study_allowed(data))
         if role == "monitor":
             eligible = eligible and gate["eligible"] and config["authorization"]["search_mode"] != "provided_only"
         if mode == "test" and options.get("cleanup_required"):
@@ -90,9 +91,11 @@ def automation_plan(service, on=None, project=None):
             action, reason = "blocked_owner", "只指定一个客户端和设备运行自动化"
         elif mode == "setup" and active:
             action, reason = "await_mode_confirmation", "已有正式任务；安装准备不擅自改动，先确认使用模式并对账"
+        elif not study_allowed(data) and active and not options.get('cleanup_required'):
+            action, reason = 'await_onboarding', '严格引导尚未确认完整；先补确认，不擅自停用或重建原任务'
         elif not eligible:
             action = "disable" if active else "wait"
-            reason = "测试任务待实际停用核验" if options.get("cleanup_required") else "首次先创建、跳过或登记桌面项目受阻" if host_project["status"] == "pending" else "尚未进入正式复习或未要求任务" if not requested else gate["reason"] if role == "monitor" else "工作空间未绑定或正在迁移"
+            reason = "测试任务待实际停用核验" if options.get("cleanup_required") else "首次先创建、跳过或登记桌面项目受阻" if host_project["status"] == "pending" else '严格引导与完整设置摘要尚未确认' if not study_allowed(data) else "尚未进入正式复习或未要求任务" if not requested else gate["reason"] if role == "monitor" else "工作空间未绑定或正在迁移"
         elif receipt and receipt["status"] == "verified" and receipt.get("fingerprint") == fp and receipt.get("observed"):
             action, reason = "keep", "已保存同一规格的真实宿主回读证据；配置变化后须重新核验"
         elif reservation and reservation.get("status") == "pending":

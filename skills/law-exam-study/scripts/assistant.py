@@ -27,7 +27,8 @@ def main():
         print(json.dumps(dispatch(args.workspace, request), ensure_ascii=False, indent=2))
         return 0
     except (ValueError, OSError, KeyError, TypeError, ImportError) as exc:
-        print(json.dumps({"error": str(exc), "instruction": "冲突重读合并；缺资料或授权则保存停靠点并等必要反馈，不打开设置网页"}, ensure_ascii=False))
+        from lawstudy.errors import error_result
+        print(json.dumps(error_result(exc), ensure_ascii=False))
         return 1
 
 

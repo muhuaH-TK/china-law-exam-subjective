@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import tempfile
 from uuid import uuid4
+from .paths import io_path
 
 
 class ConflictError(ValueError):
@@ -36,7 +37,7 @@ def blank_instance():
 
 
 def atomic_bytes(path, raw):
-    path = Path(path)
+    path = io_path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(dir=path.parent, delete=False, suffix=".tmp") as handle:
         temporary = Path(handle.name)
@@ -55,28 +56,28 @@ class Store:
         source_root = Path(__file__).resolve().parent.parent
         if self.directory.is_relative_to(source_root) and not self.directory.is_relative_to(source_root/"tests"/".tmp"):
             raise ValueError("个人实例须放在源码目录之外，避免随GitHub发布；测试只使用tests/.tmp隔离目录")
-        self.directory.mkdir(parents=True, exist_ok=True)
+        io_path(self.directory).mkdir(parents=True, exist_ok=True)
         self.path = self.directory / "instance.json"
-        if not self.path.exists():
+        if not io_path(self.path).exists():
             with self.lock():
-                if not self.path.exists():
+                if not io_path(self.path).exists():
                     self._write(blank_instance())
 
     @contextmanager
     def lock(self):
         path = self.directory / "instance.lock"
         try:
-            fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+            fd = os.open(io_path(path), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
         except FileExistsError as exc:
             raise ConflictError("实例正由其他操作保存，请稍后重读；不要删除已有锁") from exc
         os.close(fd)
         try:
             yield
         finally:
-            path.unlink()
+            io_path(path).unlink()
 
     def snapshot(self):
-        raw = self.path.read_bytes()
+        raw = io_path(self.path).read_bytes()
         data = json.loads(raw.decode("utf-8"))
         if data.get("schema_version") != 1:
             raise ValueError("实例版本不受支持，已停止读取和写入")
@@ -99,6 +100,6 @@ class Store:
             result = action(changed)
             changed["revision"] += 1
             changed["updated_at"] = utc_now()
-            atomic_bytes(self.directory / "instance.previous.json", self.path.read_bytes())
+            atomic_bytes(self.directory / "instance.previous.json", io_path(self.path).read_bytes())
             self._write(changed)
         return result

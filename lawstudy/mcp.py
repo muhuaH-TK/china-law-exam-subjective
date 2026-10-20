@@ -28,12 +28,12 @@ def tool(name, description, properties=None, required_fields=(), readonly=False)
 
 
 TOOLS = [
-    tool("onboarding_action", "首次先创建桌面项目，用户跳过或受阻可继续；start_formal须真实一次确认。capability记录实际能力核查，test_options只改独立测试实例。", {"action": {"type": "string", "enum": ["project", "start_formal", "test_options", "capability"]}, "payload": OBJECT, "version": VERSION}, ("action", "payload", "version")),
+    tool("onboarding_action", "测试与正式均须逐项answer持久确认，再展示摘要，start_formal或start_test携带summary_hash和真实确认。project可由用户在界面创建，也可跳过或受阻。", {"action": {"type": "string", "enum": ["project", "answer", "start_formal", "start_test", "test_options", "capability"]}, "payload": OBJECT, "version": VERSION}, ("action", "payload", "version")),
     tool("create_test_instance", "按用户测试要求建立独立测试实例和绑定，不修改正式数据；之后须用返回的测试工作空间或其独立MCP连接。", {"workspace": STRING, "user_instruction": STRING}, ("workspace", "user_instruction")),
     tool("run_action", "记录固定任务对应的每日运行、实际日期聊天与结果；正常到点触发须原生调度事件，不能用立即运行代替。", {"action": {"type": "string", "enum": ["begin", "record_chat", "finish"]}, "payload": OBJECT, "version": VERSION}, ("action", "payload", "version")),
     tool("record_acceptance", "按客户端、设备、模式和工作空间记录分项实机证据；程序测试不证明客户端验收，scheduled_trigger只能由实际运行确认。", {"payload": OBJECT, "version": VERSION}, ("payload", "version")),
     tool("migration_action", "用户指定目标后prepare冻结/核验备份，execute复制绑定；失败可cancel恢复，目标已绑定可finalize。保留源目录，须先实际停旧任务。", {"workspace": STRING, "action": {"type": "string", "enum": ["prepare", "execute", "cancel", "finalize"]}, "payload": OBJECT, "version": VERSION}, ("workspace", "action", "payload", "version")),
-    tool("get_workflow", "读取完整桌面、安装恢复、复习或监测规则，不要求宿主另找仓库。首次先desktop和installation。", {"name": {"type": "string", "enum": ["desktop", "workflow", "rules", "monitor", "installation"]}}, readonly=True),
+    tool("get_workflow", "读取完整桌面、安装恢复、复习或监测规则，不要求宿主另找仓库。首次先desktop和installation。", {"name": {"type": "string", "enum": ["desktop", "workflow", "rules", "monitor", "installation", "project"]}}, readonly=True),
     tool("desktop_context", "读取当前项目的聊天引导、真实待答停靠点、当日安排与原生任务缺项。未授权时隐藏私人记录。", {"on": STRING}, readonly=True),
     tool("automation_plan", "给AI生成原生定时任务创建/更新/停止计划；第一阶段不创建监测任务，不能据此声称已运行。", readonly=True),
     tool("automation_action", "先claim并reconcile真实宿主查询。未找到须reserve_create再创建；record_task(verified)须实际规格回读，禁止仅刷新指纹。迁移前停旧任务。", {"action": {"type": "string", "enum": ["claim", "reconcile", "reserve_create", "abandon_creation", "record_task", "release"]}, "payload": OBJECT, "version": VERSION}, ("action", "payload", "version")),
@@ -98,7 +98,7 @@ def call(service, name, args):
         return state
     if name == "configure_instance":
         required(args["user_instruction"], "用户设置原话依据", 5000)
-        service.configure(args["config"], args["version"])
+        service.configure(args["config"], args["version"], args['user_instruction'])
         return {"saved": True, "version": service.status()["version"]}
     if name == "import_selected_material":
         required(args["user_instruction"], "用户指定文件或授权范围内导入的实际依据", 5000)
@@ -247,7 +247,8 @@ def serve(service, incoming=None, outgoing=None):
                     value = call(service, definition["name"], args)
                     result = {"content": value["_mcp_content"] if isinstance(value, dict) and "_mcp_content" in value else [{"type": "text", "text": json.dumps(value, ensure_ascii=False)}], "isError": False}
                 except (ValueError, OSError, KeyError, TypeError, ImportError) as exc:
-                    result = {"content": [{"type": "text", "text": json.dumps({"error": str(exc), "instruction": "保存冲突须重读；授权或用户资料缺少时暂停等待，不补造。"}, ensure_ascii=False)}], "isError": True}
+                    from .errors import error_result
+                    result = {"content": [{"type": "text", "text": json.dumps(error_result(exc), ensure_ascii=False)}], "isError": True}
             else:
                 send({"jsonrpc": "2.0", "id": identity, "error": {"code": -32601, "message": "不支持的方法"}})
                 continue

@@ -27,7 +27,8 @@ class ReviewRegressions(unittest.TestCase):
         return self.service.store.snapshot()[1]
 
     def configure(self, value):
-        self.service.configure(value, self.version())
+        self.service.configure(value, self.version(), user_instruction="合成用户配置依据")
+        confirm_formal(self.service)
 
     def learn(self, action, value):
         return self.service.learning(action, value, self.version())

@@ -1,4 +1,5 @@
 """安装、模式、任务对账和迁移回归；宿主及用户证据全部为合成样本。"""
+from support import confirm_formal
 from copy import deepcopy
 from pathlib import Path
 import tempfile
@@ -28,7 +29,12 @@ class InstallationLifecycleTests(unittest.TestCase):
         return service_for(self.workspace)[0]
 
     def d(self, action, **kwargs):
-        return dispatch(self.workspace, {"action": action, "version": context(self.workspace)["version"], **kwargs})
+        if action == 'configure':kwargs.setdefault('user_instruction', '合成用户明确配置')
+        result = dispatch(self.workspace, {"action": action, "version": context(self.workspace)["version"], **kwargs})
+        if action == 'configure' and context(self.workspace)['experience']['mode'] in ('formal','test'):
+            confirm_formal(self.service())
+            result['context'] = context(self.workspace)
+        return result
 
     def onboard(self, operation, **payload):
         return self.d("onboarding", operation=operation, payload={"user_instruction": "合成用户明确选择", **payload})
@@ -38,10 +44,10 @@ class InstallationLifecycleTests(unittest.TestCase):
             self.onboard("project", status="created", project_id="synthetic-project", name="合成桌面项目", tool="synthetic.read_project", evidence="合成项目实际回读")
         else:
             self.onboard("project", status="skipped")
-        self.onboard("start_formal")
         self.d("configure", payload={"year": 2027, "participation": "participating", "stage_override": stage,
             "authorization": {"online_ai": True, "search_mode": "search_and_import", "scope": "合成来源"},
             "automation": {"learning_requested": True, "learning_time": "09:30", "monitor_requested": True, "monitor_time": "22:00", "daily_limit": 10}})
+        confirm_formal(self.service())
 
     def spec(self, role="learning"):
         return next(r for r in self.d("automation_plan")["tasks"] if r["role"] == role)
@@ -87,7 +93,7 @@ class InstallationLifecycleTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "项目"):
             self.onboard("start_formal")
         self.onboard("project", status="blocked", tool="synthetic.project_check", evidence="合成已检查实际能力，本机无法创建")
-        self.onboard("start_formal")
+        confirm_formal(self.service())
         state = context(self.workspace)
         self.assertEqual(state["experience"]["host_project"]["status"], "blocked")
         self.assertNotIn("project_id", state["experience"]["host_project"])
@@ -129,7 +135,7 @@ class InstallationLifecycleTests(unittest.TestCase):
         self.assertEqual(context(self.workspace, DAY)["plan"]["case_target"], 0)
         self.assertEqual(service.store.path.read_bytes(), before)
         self.onboard("project", status="skipped")
-        self.onboard("start_formal")
+        confirm_formal(service)
         self.assertEqual(service.store.snapshot()[0]["course_units"][0]["title"], "合成旧课程")
 
     def test_discovery_required_before_create_and_orphan_is_recovered(self):

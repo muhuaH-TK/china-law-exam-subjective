@@ -26,7 +26,8 @@ class ServiceTests(unittest.TestCase):
         return self.service.status()["version"]
 
     def configure(self,payload):
-        self.service.configure(payload,self.version())
+        self.service.configure(payload,self.version(), user_instruction="合成用户配置依据")
+        confirm_formal(self.service)
 
     def record(self,payload):
         self.service.record(payload,self.version())
@@ -71,7 +72,7 @@ class ServiceTests(unittest.TestCase):
         self.configure({"elective":"commercial"})
         before=self.service.store.path.read_bytes()
         with self.assertRaises(ConflictError):
-            self.service.configure({"elective":"undecided"},old)
+            self.service.configure({"elective":"undecided"},old, user_instruction="合成用户配置依据")
         with self.assertRaises(ValueError):
             self.configure({"authorization":{"search_mode":"search_and_import","scope":"","online_ai":True}})
         self.assertEqual(before,self.service.store.path.read_bytes())

@@ -11,7 +11,7 @@ from .scheduler import device_id
 from .store import ConflictError, atomic_bytes, utc_now
 
 ROOT = Path(__file__).resolve().parent.parent
-GUIDES = {"desktop": "docs/桌面聊天工作流.md", "workflow": "docs/AI工作流.md",
+GUIDES = {"project": "docs/用户手动创建项目指引.md", "desktop": "docs/桌面聊天工作流.md", "workflow": "docs/AI工作流.md",
           "rules": "docs/复习规则.md", "monitor": "docs/自动化与监测.md", "installation": "docs/安装运行与恢复.md"}
 
 
@@ -77,13 +77,13 @@ def bootstrap(workspace, client, instruction, data_dir=None, *, instance_kind="f
             service = Service(selected)
             fresh, fresh_version = service.store.snapshot()
             if fresh["revision"] == 0:
-                service.configure({"selected_ai": client}, fresh_version)
+                service.configure({"selected_ai": client}, fresh_version, instruction)
             if instance_kind == "test":
                 def mark_test(data):
                     data["instance_kind"] = "test"
                     data["config"]["usage_mode"] = "test"
                     data["test_parent"] = test_parent
-                    data["test_options"] = {"skip_materials": True, "native_requested": False}
+                    data["test_options"] = {"skip_materials": False, "native_requested": False}
                     if test_parent and test_parent.get("host_project"):
                         data.setdefault("desktop", {})["host_project"] = test_parent["host_project"]
                 service.store.update(service.store.snapshot()[1], mark_test)
@@ -145,7 +145,7 @@ def session_context(service, on=None, project=None):
     profile = state["profile"]
     if not allowed:
         profile = {k: profile[k] for k in ("schema_version", "instance_id", "revision", "lifecycle", "config")}
-    return {"status": "needs_project_decision" if state["experience"]["host_project"]["status"] == "pending" else "needs_mode" if state["experience"]["mode"] == "setup" else "ready", "project": project, "version": state["version"], "profile": profile,
+    return {"status": "needs_project_decision" if state["experience"]["host_project"]["status"] == "pending" else 'needs_onboarding' if not state['experience']['onboarding']['confirmed'] else "needs_mode" if state["experience"]["mode"] == "setup" else "ready", "project": project, "version": state["version"], "profile": profile,
             "plan": state["plan"], "setup_steps": state["setup_steps"], "next_action": state["next_action"],
             "stage_alignment": state["stage_alignment"], "material_readiness": state["material_readiness"], "experience": state["experience"],
             "learning": service.learning_state() if allowed else None,
@@ -221,7 +221,7 @@ def dispatch(workspace, request):
     elif action == "automation":
         value = automation_action(service, request["operation"], payload, version, project)
     elif action == "configure":
-        service.configure(payload, version)
+        service.configure(payload, version, request.get('user_instruction'))
         value = {"saved": True}
     elif action == "import":
         if request.get("origin"):

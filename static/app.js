@@ -109,7 +109,7 @@ function bind(id, action) {
   });
 }
 async function saveConfig(config) {
-  const result=await request("/api/config",{config});state=result.state;render();notice("设置已保存，可以继续下一步。");
+  const result=await request("/api/config",{config,user_instruction:"用户在可选本地设置页逐项选择并点击保存"});state=result.state;render();notice("设置已保存，可以继续下一步。");
 }
 bind("settings",async(form)=>saveConfig({year:Number(form.elements.year.value),elective:form.elements.elective.value,
   timezone:form.elements.timezone.value,

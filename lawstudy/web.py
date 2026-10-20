@@ -134,7 +134,7 @@ def make_server(directory, port=0):
                     raise ValueError("请求须为对象")
                 version = payload.get("version")
                 if self.path == "/api/config":
-                    service.configure(payload["config"], version)
+                    service.configure(payload["config"], version, payload.get('user_instruction'))
                 elif self.path == "/api/material":
                     result = service.import_material(payload["name"], base64.b64decode(payload["content"], validate=True),
                         payload["subject"], payload["category"], version)

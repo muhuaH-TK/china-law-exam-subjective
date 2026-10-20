@@ -37,7 +37,8 @@ class ReportRegressions(unittest.TestCase):
         return self.service.store.snapshot()[1]
 
     def configure(self, config):
-        self.service.configure(config, self.version())
+        self.service.configure(config, self.version(), user_instruction="合成用户配置依据")
+        confirm_formal(self.service)
 
     def learn(self, action, payload):
         return self.service.learning(action, payload, self.version())
@@ -193,8 +194,9 @@ class ReportRegressions(unittest.TestCase):
         path = Path(self.temp.name)/"配置.json"
         for payload in ({"elective": "undecided"}, {"config": {"elective": "administrative"}}):
             path.write_text(json.dumps(payload), encoding="utf-8")
-            result = subprocess.run([sys.executable, "run.py", "configure", "--data-dir", str(self.service.store.directory), "--file", str(path), "--version", self.version()], cwd=ROOT, capture_output=True, encoding="utf-8", timeout=15)
+            result = subprocess.run([sys.executable, "run.py", "configure", "--instruction", "合成用户明确配置", "--data-dir", str(self.service.store.directory), "--file", str(path), "--version", self.version()], cwd=ROOT, capture_output=True, encoding="utf-8", timeout=15)
             self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
+        confirm_formal(self.service)
         for i, wrapped in enumerate((False, True)):
             record = {"kind": "course", "title": "合成单元"+str(i), "subject": "刑法", "completed_on": "2027-09-13", "evidence": "合成用户反馈"}
             path.write_text(json.dumps({"record": record} if wrapped else record), encoding="utf-8")

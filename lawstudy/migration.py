@@ -7,17 +7,19 @@ from uuid import uuid4
 
 from .learning import required
 from .store import Store, atomic_bytes, utc_now
+from .paths import io_path
 
 
 def file_digest(path):
     digest = sha256()
-    with path.open("rb") as stream:
+    with io_path(path).open("rb") as stream:
         for block in iter(lambda: stream.read(1024*1024), b""):
             digest.update(block)
     return digest.hexdigest()
 
 
 def inventory(folder):
+    folder = io_path(folder)
     result = {}
     for path in sorted(folder.rglob("*")):
         relative = path.relative_to(folder)
@@ -33,8 +35,8 @@ def copy_verified(source, target, manifest):
         a, b = source/relative, target/relative
         if not a.resolve().is_relative_to(source.resolve()) or not b.resolve().is_relative_to(target.resolve()):
             raise ValueError("迁移清单路径越界")
-        b.parent.mkdir(parents=True, exist_ok=True)
-        with a.open("rb") as original, b.open("xb") as copied:
+        io_path(b.parent).mkdir(parents=True, exist_ok=True)
+        with io_path(a).open("rb") as original, io_path(b).open("xb") as copied:
             for block in iter(lambda: original.read(1024*1024), b""):
                 copied.write(block)
             copied.flush()
@@ -81,8 +83,8 @@ def migration_action(service, project, action, payload, version):
                "backup": str(backup), "instance_id": data["instance_id"], "backup_verified": False,
                "at": utc_now(), "user_instruction": instruction}
         def freeze(d):
-            backup.mkdir(parents=True, exist_ok=False)
-            atomic_bytes(backup/"instance-before.json", service.store.path.read_bytes())
+            io_path(backup).mkdir(parents=True, exist_ok=False)
+            atomic_bytes(backup/"instance-before.json", io_path(service.store.path).read_bytes())
             d.setdefault("migration_history", []).append(dict(row))
             d["migration"] = row
         service.store.update(version, freeze)
@@ -120,7 +122,7 @@ def migration_action(service, project, action, payload, version):
         if not row["backup_verified"] or file_digest(backup/"manifest.json") != row["manifest_sha256"]:
             raise ValueError("完整备份尚未核验或清单已变，不能迁移")
         check_destination(service.store.directory, workspace, target)
-        manifest = json.loads((backup/"manifest.json").read_text(encoding="utf-8"))
+        manifest = json.loads(io_path(backup/"manifest.json").read_text(encoding="utf-8"))
         source_files = inventory(service.store.directory)
         if {k: v for k, v in source_files.items() if k not in ("instance.json", "instance.previous.json")} != {k: v for k, v in manifest.items() if k not in ("instance.json", "instance.previous.json")}:
             raise ValueError("冻结后源资料发生变化，先核实，不复制不一致资料")

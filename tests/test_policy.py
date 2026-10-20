@@ -3,6 +3,7 @@ import unittest
 
 from lawstudy.policy import daily_plan, due_cards, next_due, review_card, stage, subjects, theme_group
 from lawstudy.store import blank_instance
+from lawstudy.onboarding import CONFIG_CHOICES, TEXT_CHOICES, record_choice, confirm_setup, setup_state
 
 
 def prepared(number=None, elective="administrative"):
@@ -13,6 +14,10 @@ def prepared(number=None, elective="administrative"):
     data["config"].update(year=2027, participation="participating", elective=elective, stage_override=number)
     for key, day in {"objective_end":"2027-09-12", "results":"2027-09-18", "subjective":"2027-10-17"}.items():
         data["config"]["exam_dates"][key].update(date=day, status="verified")
+    for field in CONFIG_CHOICES + TEXT_CHOICES:
+        value = data['config'][field] if field in CONFIG_CHOICES else '合成用户明确暂不提供／不安装'
+        record_choice(data, {'field':field,'value':value,'user_instruction':'合成用户逐项选择'})
+    confirm_setup(data, {'summary_hash':setup_state(data)['summary_hash'],'user_instruction':'合成用户确认完整摘要'})
     return data
 
 

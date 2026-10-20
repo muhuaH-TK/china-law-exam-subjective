@@ -31,7 +31,7 @@ def main(argv=None):
     parser.add_argument("--version", help="status返回的内容版本；保存前必须带上")
     parser.add_argument("--subject", default="综合")
     parser.add_argument("--category", default="other")
-    parser.add_argument("--instruction", help="用户明确指令的真实依据；用于指定自动化设备")
+    parser.add_argument("--instruction", help="用户明确指令的真实依据；配置保存或指定自动化设备时必需")
     parser.add_argument("--workspace", default=str(Path.cwd()), help="AI桌面的本地复习项目目录")
     args = parser.parse_args(argv)
     if args.command == "doctor":
@@ -107,7 +107,7 @@ def main(argv=None):
                     if set(payload)-{"config"}:
                         raise ValueError("包装设置文件只能含config；版本使用--version提供")
                     payload = payload["config"]
-                service.configure(payload, args.version)
+                service.configure(payload, args.version, args.instruction)
             else:
                 if isinstance(payload, dict) and "record" in payload:
                     if set(payload)-{"record"}:
@@ -118,7 +118,8 @@ def main(argv=None):
         emit(state["plan"] if args.command == "plan" else state)
         return 0
     except (ValueError, OSError, KeyError, TypeError, ImportError) as exc:
-        emit({"error": str(exc), "conflict": isinstance(exc, ConflictError)})
+        from lawstudy.errors import error_result
+        emit({**error_result(exc), "conflict": isinstance(exc, ConflictError)})
         return 1
 
 
