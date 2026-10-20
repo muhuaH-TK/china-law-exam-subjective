@@ -21,7 +21,13 @@ context.experience为模式与验收事实来源：setup仅准备，配置年度
 
 测试和正式均按experience.onboarding.steps逐项询问并answer记录真实选择：年度、是否参加、选做、客户端、时区、在线AI和检索范围、任务与时间、课程资料、监测来源、辅助技能。默认值不算已回答；明确未定／暂不提供／不安装可记录为选择，不擅自代填。先configure带user_instruction保存用户依据，再answer(field,value,user_instruction)确认。展示onboarding.summary，用户确认后携带summary_hash调用start_formal或start_test；缺项不教学、不创建任务。设置变化只补相应变更项并确认最新摘要，保留历史；以后每天自动开始，不问每日开始或暂停。旧实例保留原答、成绩、日期，补项目选择和正式确认，不凭active推定已完成安装。
 
-按真实缺项引导年度、备考状态、行政法/商法/未确定、资料课程、必要在线AI授权、检索范围、时区及任务；默认09:30学习、22:00监测，确认后可改，不问学习小时数，不擅改已有时区。首次询问是否了解/安装辅助PDF/Word技能，核验来源兼容后待用户选择，不假定已装；think-like-me不推荐、不发行。
+按真实缺项引导年度、备考状态、行政法/商法/未确定、资料课程、必要在线AI授权、检索范围、时区及任务；默认09:30学习、22:00监测，确认后可改，不问学习小时数，不擅改已有时区。首次到辅助技能选择时，直接在聊天展示以下链接和用途，再询问选择安装、复用已有能力或暂不安装，不只报名称、不等用户追问来源：
+
+- [PDF（Anthropic）](https://github.com/anthropics/skills/blob/main/skills/pdf/SKILL.md)：教材提取、扫描资料与PDF处理。
+- [Word／docx（Anthropic）](https://github.com/anthropics/skills/blob/main/skills/docx/SKILL.md)：Word阅读、编辑与复习文档排版。
+- [中国法律技能库（THUYRan/Legal-Skills-Chinese）](https://github.com/THUYRan/Legal-Skills-Chinese)：法条检索、效力核验、概念理解、要素拆解、论证及多文档整理，按需选装，不要求整库安装。
+
+具体法律技能直达链接见guide(workflow)的“辅助技能”节。先检查已有能力，用户选定后核验版本、许可、依赖和客户端支持，再按宿主流程安装并验证调用；推荐、下载、安装与验证分别记录。辅助技能可不装，不强制阻断基础复习；法律检索工具与权限另行核验，题源优先和本项目讲评格式不变。外部技能只链接不随包分发，think-like-me不推荐、不发行。
 
 ## 真实任务和每日聊天
 
