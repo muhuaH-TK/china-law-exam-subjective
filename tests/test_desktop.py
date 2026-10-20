@@ -309,6 +309,9 @@ class DesktopTests(unittest.TestCase):
             self.assertTrue(result[key]["manifest_verified"])
             with zipfile.ZipFile(result[key]["path"]) as archive:
                 self.assertIsNone(archive.testzip())
+                license_path = {'source': 'LICENSE', 'skill': 'law-exam-study/LICENSE',
+                                'codex_plugin': 'plugins/china-law-exam-subjective/LICENSE'}[key]
+                self.assertEqual(archive.read(license_path), (ROOT/'LICENSE').read_bytes())
                 self.assertFalse(any("/.law-study/" in name or "tests/.tmp/" in name for name in archive.namelist()))
                 folder = Path(self.temp.name)/key
                 archive.extractall(folder)

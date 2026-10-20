@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "china-law-exam-subjective",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "中国法律职业资格考试主观题复习：在桌面聊天中引导设置、自动安排学习、订正保存与题源监测",
   "author": {"name": "muhuaH-TK"},
   "repository": "https://github.com/muhuaH-TK/china-law-exam-subjective",

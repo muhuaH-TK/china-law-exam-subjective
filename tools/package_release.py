@@ -10,7 +10,7 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parent.parent
 FOLDERS = {"lawstudy", "static", "tests", "docs", "tools", ".github", "skills", ".workbuddy-plugin"}
-TOP = {"run.py", "README.md", "AGENTS.md", "pyproject.toml", "requirements.txt", "requirements-export.txt", ".gitignore", "启动.cmd", "启动.command", "plugin.json"}
+TOP = {"LICENSE", "run.py", "README.md", "AGENTS.md", "pyproject.toml", "requirements.txt", "requirements-export.txt", ".gitignore", "启动.cmd", "启动.command", "plugin.json"}
 SUFFIXES = {".py", ".html", ".js", ".css", ".md", ".yml", ".yaml", ".json"}
 
 
@@ -60,7 +60,9 @@ def build_packages(output=None):
     # WorkBuddy“上传技能”：单个技能目录，内含同版本完整运行核心，安装后无需指回作者目录。
     prefix = "skills/law-exam-study/"
     skill = {"law-exam-study/"+name.removeprefix(prefix): raw for name, raw in content.items() if name.startswith(prefix)}
-    runtime = {name: raw for name, raw in content.items() if name.split("/")[0] in ("lawstudy", "docs", "static") or name in ("run.py", "AGENTS.md", "pyproject.toml", "requirements.txt", "requirements-export.txt")}
+    runtime = {name: raw for name, raw in content.items() if name.split("/")[0] in ("lawstudy", "docs", "static") or name in ("LICENSE", "run.py", "AGENTS.md", "pyproject.toml", "requirements.txt", "requirements-export.txt")}
+    if 'LICENSE' in content:
+        skill['law-exam-study/LICENSE'] = content['LICENSE']
     skill.update({"law-exam-study/runtime/"+name: raw for name, raw in runtime.items()})
     skill_result = write_archive(output/f"law-exam-study-{version}-skill.zip", skill, "law-exam-study/SOURCE_MANIFEST.json")
     # Codex本地插件市场包，遵循市场根目录的相对路径，不复制用户全局配置。
